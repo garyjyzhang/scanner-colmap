@@ -1,0 +1,7 @@
+version: '2.3'
+services:
+    default:
+      image: scanner-colmap
+      volumes:
+        - .:/app
+      command: sh /app/scripts/init.sh

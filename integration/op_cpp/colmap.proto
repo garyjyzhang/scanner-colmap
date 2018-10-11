@@ -1,0 +1,65 @@
+syntax = "proto2";
+
+//////////////////////////////////////////////////////////////////////////////
+// Below are configs for SIFT feature matching
+//////////////////////////////////////////////////////////////////////////////
+message siftFeatureMatchingArgs {
+  optional bool use_gpu = 1 [default = false];
+
+  // Index of the GPU used for feature matching. For multi-GPU matching,
+  // you should separate multiple GPU indices by comma, e.g., "0,1,2,3".
+  optional string gpu_index = 2  [default = "-1"];
+
+  // Maximum distance ratio between first and second best match.
+  optional double max_ratio = 3 [default = 0.8];
+
+  // Maximum distance to best match.
+  optional double max_distance = 4 [default = 0.7];
+
+  // Whether to enable cross checking in matching.
+  optional bool cross_check = 5 [default = true];
+
+  // Maximum number of matches.
+  optional int32 max_num_matches = 6 [default = 32768];
+
+  // Maximum epipolar error in pixels for geometric verification.
+  optional float max_error = 7 [default = 4.0];
+
+  // Confidence threshold for geometric verification.
+  optional double confidence = 8  [default = 0.999];
+
+  // Minimum/maximum number of RANSAC iterations. Note that this option
+  // overrules the min_inlier_ratio option.
+  optional int32 min_num_trials = 9 [default = 30];
+  optional int32 max_num_trials = 10 [default = 10000];
+
+  // A priori assumed minimum inlier ratio, which determines the maximum
+  // number of iterations.
+  optional double min_inlier_ratio = 11 [default = 0.25];
+
+  // Minimum number of inliers for an image pair to be considered as
+  // geometrically verified.
+  optional int32 min_num_inliers = 12 [default = 15];
+
+  // Whether to attempt to estimate multiple geometric models per image pair.
+  optional bool multiple_models = 13 [default = false];
+
+  // Whether to perform guided matching, if geometric verification succeeds.
+  optional bool guided_matching = 14 [default = false];
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Below are configs for sequential matching
+//////////////////////////////////////////////////////////////////////////////
+// Relevant configs for sequential matching
+message SequentialMatchingArgs {
+  // currently does not support loop detection
+  optional bool loop_detection = 1 [default = false];
+
+  optional int32 overlap = 2 [default = 10];
+
+  // Whether to match images against their quadratic neighbors.
+  optional bool quadratic_overlap = 3 [default = false];
+
+  optional siftFeatureMatchingArgs siftArgs = 4;
+}
