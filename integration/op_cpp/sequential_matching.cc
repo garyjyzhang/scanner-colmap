@@ -17,9 +17,11 @@ using colmap::FeatureDescriptors;
 using colmap::FeatureKeypoint;
 using colmap::FeatureKeypoints;
 using colmap::FeatureMatches;
+using colmap::Image;
 using colmap::image_pair_t;
 using colmap::image_t;
 using colmap::TwoViewGeometry;
+
 using scanner::u8;
 // Kernel for Colmap sequential feature matching.
 // Expect a stencil of images.
@@ -92,6 +94,7 @@ public:
            point.a12, point.a21, point.a22);
   }
 
+  // converted from colmap::TwoViewGeometryVerifier::Run
   void verifyTwoViewGeometry(TwoViewGeometry &two_view_geometry,
                              FeatureMatches &matches,
                              FeatureKeypoints &keypoints1,
@@ -114,38 +117,46 @@ public:
   void execute(const scanner::StenciledBatchedElements &input_cols,
                scanner::BatchedElements &output_cols) override {
 
-    auto &image_id_stencil = input_cols[0][0];
+    auto &image_stencil = input_cols[0][0];
     auto &keypoint_stencil = input_cols[1][0];
     auto &descriptor_stencil = input_cols[2][0];
 
-    std::vector<image_t> image_ids;
-    std::vector<FeatureKeypoints> keypoints;
-    std::vector<FeatureDescriptors> descriptors;
+    std::vector<Image> images;
+    std::vector<FeatureKeypoints> keypoints_list;
+    std::vector<FeatureDescriptors> descriptors_list;
 
-    for (int i = 0; i < image_id_stencil.size(); i++) {
-      image_ids.push_back(
-          *reinterpret_cast<image_t *>(image_id_stencil[i].buffer));
+    // read in images, descriptors, and keypoints
+    for (int i = 0; i < image_stencil.size(); i++) {
+      std::cout << "read image" << std::endl;
+      images.push_back(readSingleFromElement<Image>(image_stencil[i]));
+      std::cout << "read keypoints" << std::endl;
+      keypoints_list.push_back(
+          readVectorFromElement<FeatureKeypoints>(keypoint_stencil[i]));
+      std::cout << "read descriptors" << std::endl;
+      descriptors_list.push_back(
+          ReadMatrixFromElement<FeatureDescriptors>(descriptor_stencil[i]));
 
-      std::cout << "image id: " << image_ids[i] << std::endl;
-      // Read descriptors
-      descriptors.push_back(ReadDescriptorsFromElement(descriptor_stencil[i]));
-
-      keypoints.push_back(readKeypointsFromElement(keypoint_stencil[i]));
+      std::cout << "Read image id: " << images[i].ImageId() << std::endl;
     }
-    std::cout << "stencil size: " << image_ids.size() << std::endl;
+    std::cout << "stencil size: " << images.size() << std::endl;
 
-    int center_idx = descriptors.size() / 2;
+    // left-most image to match with every other image
+    Image image1 = images[0];
+    image_t image_id1 = image1.ImageId();
+    FeatureDescriptors &descriptors1 = descriptors_list[0];
+    FeatureKeypoints &keypoints1 = keypoints_list[0];
 
-    for (int i = 0; i < image_ids.size(); i++) {
-      if (i == center_idx)
-        continue;
+    MatchingResult matching_result(image1);
 
-      image_t image_id1 = image_ids[center_idx];
-      image_t image_id2 = image_ids[i];
-      FeatureDescriptors descriptors1 = descriptors[center_idx];
-      FeatureDescriptors descriptors2 = descriptors[i];
-      FeatureKeypoints keypoints1 = keypoints[center_idx];
-      FeatureKeypoints keypoints2 = keypoints[i];
+    for (int i = 1; i < images.size(); i++) {
+      Image image2 = images[i];
+      image_t image_id2 = image2.ImageId();
+      FeatureDescriptors descriptors2 = descriptors_list[i];
+      FeatureKeypoints keypoints2 = keypoints_list[i];
+      matching_result.add_peer(image2);
+
+      std::cout << "matching image " << image1.ImageId() << " with image "
+                << image2.ImageId() << std::endl;
 
       // Create pair id
       image_pair_t pair_id =
@@ -165,19 +176,25 @@ public:
 
       if (featureMatches.size() <
           static_cast<size_t>(sift_options_.min_num_inliers)) {
+        printf("FeatureMatches for %d and %d has too few inliers", image_id1,
+               image_id2);
         featureMatches.clear();
       }
 
       if (two_view_geometry.inlier_matches.size() <
           static_cast<size_t>(sift_options_.min_num_inliers)) {
+        printf("View geometry for %d and %d has too few inliers", image_id1,
+               image_id2);
         two_view_geometry = TwoViewGeometry();
       }
 
+      matching_result.add_feature_matches(featureMatches);
+      matching_result.add_two_view_geometry(two_view_geometry);
+
+      // write matching result to output column
       std::cout << "inserting to columns..." << std::endl;
 
-      writeSingleToColumn<image_pair_t>(output_cols[0], pair_id);
-      writeFeatureMatchesToColumn(output_cols[1], featureMatches);
-      writeSingleToColumn<TwoViewGeometry>(output_cols[2], two_view_geometry);
+      writeMatchingResultToColumn(output_cols[0], matching_result);
     }
   }
 
@@ -192,11 +209,10 @@ REGISTER_OP(SequentialMatchingCPU)
     .input("image_ids")
     .input("keypoints")
     .input("descriptors")
-    .output("pair_id")
-    .output("feature_matches")
-    .output("two_view_geometry")
+    .output("matching_results")
     .protobuf_name("featureMatchingArgs");
 
 REGISTER_KERNEL(SequentialMatchingCPU, SequentialMatchingCPUKernel)
     .device(scanner::DeviceType::CPU)
+    .batch()
     .num_devices(1);

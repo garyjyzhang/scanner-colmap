@@ -4,4 +4,5 @@ services:
       image: scanner-colmap
       volumes:
         - .:/app
+        - ../image_sets:/image_sets
       command: sh /app/scripts/init.sh

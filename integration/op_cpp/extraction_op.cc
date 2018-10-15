@@ -1,3 +1,6 @@
+#include <string>
+
+#include "io.cc"
 #include "siftExtraction.pb.h"
 
 #include "scanner/api/kernel.h"
@@ -11,13 +14,16 @@
 #include <colmap/util/bitmap.h>
 #include <colmap/util/option_manager.h>
 
-using scanner::u8;
-using std::size_t;
+using colmap::Bitmap;
+using colmap::Camera;
+using colmap::Image;
+
+// Kernel class to perform colmap's SIFT extraction
 class SiftExtractionKernel : public scanner::Kernel,
                              public scanner::VideoKernel {
 public:
   SiftExtractionKernel(const scanner::KernelConfig &config)
-      : scanner::Kernel(config), id_counter(0) {}
+      : scanner::Kernel(config) {}
 
   void resizeBitmap(colmap::Bitmap &bitmap, int max_image_size) {
     if (static_cast<int>(bitmap.Width()) > max_image_size ||
@@ -32,135 +38,116 @@ public:
     }
   }
 
-  void createKeypointsBuffer(colmap::FeatureKeypoints &keypoints,
-                             scanner::Element &output) {
-    size_t rows = keypoints.size();
-    size_t keypointByteSize = sizeof(colmap::FeatureKeypoint);
-    size_t keypointsByteSize = keypointByteSize * rows;
-    u8 *keypointsBuffer =
-        new_buffer(scanner::CPU_DEVICE, keypointsByteSize + sizeof(rows));
+  // TODO: pass in image reader options
+  // converted from colmap::ImageReader::Next
+  void ReadImage(size_t image_id, Camera *camera, Image *image,
+                 Bitmap *bitmap) {
+    // use default options for now
+    colmap::ImageReaderOptions options;
 
-    std::memcpy(keypointsBuffer, &rows, sizeof(rows));
-    std::memcpy(keypointsBuffer + sizeof(rows), keypoints.data(),
-                keypointsByteSize);
+    image->SetImageId(image_id);
+    // use the format image_${image_id} for name
+    image->SetName("image_" + std::to_string(image_id));
 
-    insert_element(output, keypointsBuffer, keypointsByteSize + sizeof(rows));
+    // extract camera model
+    double focal_length = 0.0;
+    if (bitmap->ExifFocalLength(&focal_length)) {
+      camera->SetPriorFocalLength(true);
+    } else {
+      focal_length = options.default_focal_length_factor *
+                     std::max(bitmap->Width(), bitmap->Height());
+      camera->SetPriorFocalLength(false);
+    }
+
+    camera->SetModelIdFromName(options.camera_model);
+    camera->InitializeWithId(camera->ModelId(), focal_length, bitmap->Width(),
+                             bitmap->Height());
+    camera->SetWidth(static_cast<size_t>(bitmap->Width()));
+    camera->SetHeight(static_cast<size_t>(bitmap->Height()));
+
+    // if (!camera->VerifyParams()) {
+    //   return Status::CAMERA_PARAM_ERROR;
+    // }
+
+    camera->SetCameraId(image_id);
+    image->SetCameraId(camera->CameraId());
+
+    // extract GPS data
+    if (!bitmap->ExifLatitude(&image->TvecPrior(0)) ||
+        !bitmap->ExifLongitude(&image->TvecPrior(1)) ||
+        !bitmap->ExifAltitude(&image->TvecPrior(2))) {
+      image->TvecPrior().setConstant(std::numeric_limits<double>::quiet_NaN());
+    }
   }
 
-  void printKeypoint(colmap::FeatureKeypoint &point) {
-    printf("point: %f %f %f %f %f %f \n", point.x, point.y, point.a11,
-           point.a12, point.a21, point.a22);
-  }
+  // void printKeypoint(colmap::FeatureKeypoint &point) {
+  //   printf("point: %f %f %f %f %f %f \n", point.x, point.y, point.a11,
+  //          point.a12, point.a21, point.a22);
+  // }
 
   void execute(const scanner::Elements &input_cols,
                scanner::Elements &output_cols) override {
-    auto &frame_col = input_cols[0];
+    auto &image_id_col = input_cols[0];
+    auto &frame_col = input_cols[1];
+
+    size_t image_id = readSingleFromElement<size_t>(image_id_col);
 
     check_frame(scanner::CPU_DEVICE, frame_col);
 
     const scanner::Frame *frame = frame_col.as_const_frame();
 
-    std::cout << frame->width() << ' ' << frame->height() << ' '
-              << frame->channels() << std::endl;
-
-    int bpp = 24; // assume 3 color channels
-    int pitch = frame->width() * 3;
+    // convert Scanner::Frame to colmap::Bitmap
+    int bpp = frame->channels() * 8;
+    int pitch = frame->width() * frame->channels();
 
     FIBITMAP *fibitmap = FreeImage_ConvertFromRawBits(
         frame->data, frame->width(), frame->height(), pitch, bpp,
         FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, true);
 
     colmap::Bitmap bitmap(fibitmap);
+    // only need grey scale for colmap
     colmap::Bitmap bitmap_grey = bitmap.CloneAsGrey();
+
+    // set up configs for SIFT
+    // TODO: pass options from kernel configs
     colmap::SiftExtractionOptions siftOptions;
-    siftOptions.use_gpu = false;
+    siftOptions.use_gpu = false; // no gpu for now
 
-    colmap::FeatureKeypoints keypoints;
-    colmap::FeatureDescriptors descriptors;
-    std::cout << "starting extraction..." << std::endl;
-
-    // debug use image_reader for image reading
-    // colmap::ImageReaderOptions image_reader_opt;
-    // image_reader_opt.image_path = "/app/gerrard-hall/images/";
-    // colmap::Database database("/app/integration/colmap.db");
-    // colmap::ImageReader image_reader(image_reader_opt, &database);
-    // colmap::Camera camera;
-    // colmap::Image image;
-    // colmap::Bitmap read_bitmap;
-    // image_reader.Next(&camera, &image, &read_bitmap);
-    // std::cout << "image reader read: " << image.Name() << std::endl;
-    // debug end
-
+    // scale down the image if needed
     resizeBitmap(bitmap_grey, siftOptions.max_image_size);
 
-    // colmap::ExtractSiftFeaturesCPU(siftOptions, read_bitmap, &keypoints,
-    // &descriptors);
+    // start SIFT extraction process
+    std::cout << "starting extraction..." << std::endl;
+    colmap::FeatureKeypoints keypoints;
+    colmap::FeatureDescriptors descriptors;
+
     colmap::ExtractSiftFeaturesCPU(siftOptions, bitmap_grey, &keypoints,
                                    &descriptors);
 
     std::cout << "extraction complete" << std::endl;
+    // SIFT extraction end
 
-    // debug print key point x y, #features
-    // for(auto keypoint: keypoints) {
-    //   std::cout << "x: " << keypoint.x << "y: " << keypoint.y << std::endl;
-    // }
-    // std::cout << "number of features: " << keypoints.size() << std::endl;
+    // Create Image and Camera
+    // Creating a separate camera for each image due to lack of db
+    Camera camera;
+    Image image;
+    ReadImage(image_id, &camera, &image, &bitmap_grey);
 
-    // Create buffer for keypoints
-    createKeypointsBuffer(keypoints, output_cols[1]);
-    printKeypoint(keypoints.front());
-    printKeypoint(keypoints.back());
-
-    // Create buffer for descriptors
-    size_t rows = descriptors.rows();
-    size_t cols = descriptors.cols();
-    size_t index_size = sizeof(size_t);
-    size_t matrix_num_bytes =
-        descriptors.size() *
-        sizeof(typename colmap::FeatureDescriptors::Scalar);
-
-    size_t descriptorsByteSize = matrix_num_bytes + index_size * 2;
-    u8 *descriptorsBuffer =
-        new_buffer(scanner::CPU_DEVICE, descriptorsByteSize);
-    std::memcpy(descriptorsBuffer, &rows, index_size);
-    std::memcpy(descriptorsBuffer + index_size, &cols, index_size);
-    std::memcpy(descriptorsBuffer + index_size * 2, descriptors.data(),
-                descriptors.size());
-    std::cout << "image id: " << id_counter << std::endl;
-    std::cout << "rows cols: " << descriptors.rows() << " "
-              << descriptors.cols() << std::endl;
-    std::cout << "matrix size: " << descriptors.size() << std::endl;
-
-    // for debug image output
-    // u8* bits = new_buffer(scanner::CPU_DEVICE, bitmap_grey.Width() *
-    // bitmap_grey.Height()); FIBITMAP* gray = (FIBITMAP*)bitmap_grey.Data();
-    // scanner::FrameInfo output_frame_info(bitmap_grey.Height(),
-    // bitmap_grey.Width(), bitmap_grey.Channels(), scanner::FrameType::U8);
-    // FreeImage_ConvertToRawBits(bits, gray, bitmap_grey.Width(), 8,
-    // FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, true);
-    // scanner::Frame* output_frame = new scanner::Frame(output_frame_info,
-    // bits);
-
-    // insert_frame(output_cols[0], output_frame);
-
-    u8 *image_id_buffer = new_buffer(scanner::CPU_DEVICE, sizeof(int));
-    std::memcpy(image_id_buffer, &id_counter, sizeof(int));
-
-    insert_element(output_cols[0], image_id_buffer, sizeof(int));
-    insert_element(output_cols[2], descriptorsBuffer, descriptorsByteSize);
-
-    id_counter++;
+    // write to output columns
+    writeSingleToElement(output_cols[0], image);
+    writeVectorToElement(output_cols[1], keypoints);
+    writeMatrixToElement(output_cols[2], descriptors);
+    writeSingleToElement(output_cols[3], camera);
   }
-
-private:
-  int id_counter;
 };
 
 REGISTER_OP(SiftExtraction)
-    .frame_input("frame")
-    .output("image_id")
+    .input("image_ids")
+    .frame_input("frames")
+    .output("colmap_images")
     .output("keypoints")
     .output("descriptors")
+    .output("cameras")
     .protobuf_name("siftExtractionArgs");
 
 REGISTER_KERNEL(SiftExtraction, SiftExtractionKernel)

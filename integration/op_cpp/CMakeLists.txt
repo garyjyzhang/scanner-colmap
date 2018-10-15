@@ -94,6 +94,11 @@ endfunction()
 # from all of the CPP_SRCS. You can also optionally specify a PROTO_SRC that
 # points to a Protobuf file and will generate the C++ and Python bindings.
 build_op(
+  LIB_NAME prepare_image
+  CPP_SRCS prepare_image.cc
+)
+
+build_op(
   LIB_NAME extraction_op
   CPP_SRCS extraction_op.cc
   PROTO_SRC siftExtraction.proto)
