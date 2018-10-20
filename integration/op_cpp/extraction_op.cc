@@ -40,14 +40,9 @@ public:
 
   // TODO: pass in image reader options
   // converted from colmap::ImageReader::Next
-  void ReadImage(size_t image_id, Camera *camera, Image *image,
-                 Bitmap *bitmap) {
+  void extractCamera(size_t image_id, Camera *camera, Bitmap *bitmap) {
     // use default options for now
     colmap::ImageReaderOptions options;
-
-    image->SetImageId(image_id);
-    // use the format image_${image_id} for name
-    image->SetName("image_" + std::to_string(image_id));
 
     // extract camera model
     double focal_length = 0.0;
@@ -70,14 +65,6 @@ public:
     // }
 
     camera->SetCameraId(image_id);
-    image->SetCameraId(camera->CameraId());
-
-    // extract GPS data
-    if (!bitmap->ExifLatitude(&image->TvecPrior(0)) ||
-        !bitmap->ExifLongitude(&image->TvecPrior(1)) ||
-        !bitmap->ExifAltitude(&image->TvecPrior(2))) {
-      image->TvecPrior().setConstant(std::numeric_limits<double>::quiet_NaN());
-    }
   }
 
   // void printKeypoint(colmap::FeatureKeypoint &point) {
@@ -127,24 +114,20 @@ public:
     std::cout << "extraction complete" << std::endl;
     // SIFT extraction end
 
-    // Create Image and Camera
     // Creating a separate camera for each image due to lack of db
     Camera camera;
-    Image image;
-    ReadImage(image_id, &camera, &image, &bitmap_grey);
+    extractCamera(image_id, &camera, &bitmap_grey);
 
     // write to output columns
-    writeSingleToElement(output_cols[0], image);
-    writeVectorToElement(output_cols[1], keypoints);
-    writeMatrixToElement(output_cols[2], descriptors);
-    writeSingleToElement(output_cols[3], camera);
+    writeVectorToElement(output_cols[0], keypoints);
+    writeMatrixToElement(output_cols[1], descriptors);
+    writeCameraToElement(output_cols[2], camera);
   }
 };
 
 REGISTER_OP(SiftExtraction)
     .input("image_ids")
     .frame_input("frames")
-    .output("colmap_images")
     .output("keypoints")
     .output("descriptors")
     .output("cameras")

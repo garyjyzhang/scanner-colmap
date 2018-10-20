@@ -117,50 +117,46 @@ public:
   void execute(const scanner::StenciledBatchedElements &input_cols,
                scanner::BatchedElements &output_cols) override {
 
-    auto &image_stencil = input_cols[0][0];
+    auto &image_id_stencil = input_cols[0][0];
     auto &keypoint_stencil = input_cols[1][0];
     auto &descriptor_stencil = input_cols[2][0];
 
-    std::vector<Image> images;
+    std::vector<image_t> image_ids;
     std::vector<FeatureKeypoints> keypoints_list;
     std::vector<FeatureDescriptors> descriptors_list;
 
-    // read in images, descriptors, and keypoints
-    for (int i = 0; i < image_stencil.size(); i++) {
-      std::cout << "read image" << std::endl;
-      images.push_back(readSingleFromElement<Image>(image_stencil[i]));
-      std::cout << "read keypoints" << std::endl;
+    // read in image ids, descriptors, and keypoints
+    for (int i = 0; i < image_id_stencil.size(); i++) {
+      image_ids.push_back(readSingleFromElement<image_t>(image_id_stencil[i]));
       keypoints_list.push_back(
           readVectorFromElement<FeatureKeypoints>(keypoint_stencil[i]));
-      std::cout << "read descriptors" << std::endl;
       descriptors_list.push_back(
           ReadMatrixFromElement<FeatureDescriptors>(descriptor_stencil[i]));
 
-      std::cout << "Read image id: " << images[i].ImageId() << std::endl;
+      std::cout << "Read image id: " << image_ids[i] << std::endl;
     }
-    std::cout << "stencil size: " << images.size() << std::endl;
+    std::cout << "stencil size: " << image_ids.size() << std::endl;
 
     // left-most image to match with every other image
-    Image image1 = images[0];
-    image_t image_id1 = image1.ImageId();
+    image_t image_id1 = image_ids[0];
     FeatureDescriptors &descriptors1 = descriptors_list[0];
     FeatureKeypoints &keypoints1 = keypoints_list[0];
 
-    MatchingResult matching_result(image1);
+    vector<image_t> pair_image_ids;
+    // vector<FeatureMatches> feature_matches_list;
+    vector<TwoViewGeometry> two_view_geometry_list;
 
-    for (int i = 1; i < images.size(); i++) {
-      Image image2 = images[i];
-      image_t image_id2 = image2.ImageId();
+    for (int i = 1; i < image_ids.size(); i++) {
+      image_t image_id2 = image_ids[i];
+      if (image_id2 == image_id1)
+        continue;
+
+      pair_image_ids.push_back(image_id2);
       FeatureDescriptors descriptors2 = descriptors_list[i];
       FeatureKeypoints keypoints2 = keypoints_list[i];
-      matching_result.add_peer(image2);
 
-      std::cout << "matching image " << image1.ImageId() << " with image "
-                << image2.ImageId() << std::endl;
-
-      // Create pair id
-      image_pair_t pair_id =
-          colmap::Database::ImagePairToPairId(image_id1, image_id2);
+      std::cout << "matching image " << image_id1 << " with image " << image_id2
+                << std::endl;
 
       // Run matching
       FeatureMatches featureMatches;
@@ -188,14 +184,18 @@ public:
         two_view_geometry = TwoViewGeometry();
       }
 
-      matching_result.add_feature_matches(featureMatches);
-      matching_result.add_two_view_geometry(two_view_geometry);
-
-      // write matching result to output column
-      std::cout << "inserting to columns..." << std::endl;
-
-      writeMatchingResultToColumn(output_cols[0], matching_result);
+      // feature_matches_list.push_back(featureMatches);
+      two_view_geometry_list.push_back(two_view_geometry);
+      for (auto &featureMatch : two_view_geometry.inlier_matches) {
+        std::cout << "feature match: " << featureMatch.point2D_idx1 << " "
+                  << featureMatch.point2D_idx2 << std::endl;
+      }
     }
+
+    // write matching result to output column
+    std::cout << "inserting to columns..." << std::endl;
+    writeVectorToColumn<vector<image_t>>(output_cols[0], pair_image_ids);
+    writeTwoViewGeometryListToColumn(output_cols[1], two_view_geometry_list);
   }
 
 private:
@@ -209,7 +209,8 @@ REGISTER_OP(SequentialMatchingCPU)
     .input("image_ids")
     .input("keypoints")
     .input("descriptors")
-    .output("matching_results")
+    .output("pair_image_ids")
+    .output("two_view_geometries")
     .protobuf_name("featureMatchingArgs");
 
 REGISTER_KERNEL(SequentialMatchingCPU, SequentialMatchingCPUKernel)

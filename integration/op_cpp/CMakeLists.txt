@@ -109,6 +109,11 @@ build_op(
   PROTO_SRC colmap.proto
 )
 
+build_op(
+  LIB_NAME incremental_mapping
+  CPP_SRCS incremental_mapping.cc
+)
+
 include_directories(${COLMAP_INCLUDE_DIRS})
 link_directories(${COLMAP_LINK_DIRS})
 
@@ -124,8 +129,14 @@ find_library(SQLITE3_LIB sqlite3 HINTS ${COLMAP_LINK_DIRS})
 find_library(SIFT_GPU_LIB sift_gpu HINTS ${COLMAP_LINK_DIRS})
 find_library(VLFEAT_LIB vlfeat HINTS ${COLMAP_LINK_DIRS})
 
+target_link_libraries(prepare_image PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
+target_link_libraries(prepare_image PUBLIC ${MYLIB})
+
 target_link_libraries(extraction_op PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
 target_link_libraries(extraction_op PUBLIC ${MYLIB})
 
 target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
 target_link_libraries(sequential_matching PUBLIC ${MYLIB})
+
+target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
+target_link_libraries(incremental_mapping PUBLIC ${MYLIB})
