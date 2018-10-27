@@ -11,7 +11,7 @@ db.load_op(
     os.path.join(cwd, 'op_cpp/build/libsequential_matching.so'),
     os.path.join(cwd, 'op_cpp/build/colmap_pb2.py'))
 
-SEQUENTIAL_MATCHING_OVERLAP = 2
+SEQUENTIAL_MATCHING_OVERLAP = 10
 matching_stencil = range(0, SEQUENTIAL_MATCHING_OVERLAP)
 
 image_ids = db.sources.Column()
@@ -33,5 +33,6 @@ job = Job(op_args={
     camera: db.table('extraction').column('camera'),
     output: 'matching'})
 
-output_tables = db.run(output, [job], force=True)
+output_tables = db.run(output, [job], force=True,
+                       io_packet_size=20, work_packet_size=10)
 print(db.summarize())

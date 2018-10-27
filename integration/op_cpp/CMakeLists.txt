@@ -25,70 +25,13 @@ if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "No build type selected, defaulting to Release")
     set(CMAKE_BUILD_TYPE "Release")
 endif()
-
-function(build_op)
-  set(options)
-  set(oneValueArgs LIB_NAME PROTO_SRC NO_FLAGS)
-  set(multiValueArgs CPP_SRCS)
-  cmake_parse_arguments(args "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-
-  include_directories("${CMAKE_CURRENT_BINARY_DIR}")
-
-  # Build protobuf files if they exist
-  if(NOT("${args_PROTO_SRC}" STREQUAL ""))
-    find_package(Protobuf REQUIRED)
-    set(PROTOBUF_IMPORT_DIRS "${SCANNER_PATH}")
-    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${args_PROTO_SRC})
-    protobuf_generate_python(PROTO_PY ${args_PROTO_SRC})
-    add_custom_target(${args_LIB_NAME}_proto_files
-      DEPENDS ${PROTO_HDRS} ${PROTO_PY})
-    add_library(${args_LIB_NAME} SHARED ${args_CPP_SRCS} ${PROTO_SRCS})
-    add_dependencies(${args_LIB_NAME} ${args_LIB_NAME}_proto_files)
-    target_link_libraries(${args_LIB_NAME} PUBLIC "${PROTOBUF_LIBRARY}")
-  else()
-    add_library(${args_LIB_NAME} SHARED ${args_CPP_SRCS})
-  endif()
-
-  # NO_FLAGS is primarily for special treatment of libstdlib right now
-  if("${args_NO_FLAGS}" STREQUAL "")
-    # Explictly link libscanner.so
-    execute_process(
-      OUTPUT_VARIABLE SCANNER_LIB_PATH
-      COMMAND
-      python3 -c "import scannerpy.stdlib.build_flags as b; b.print_lib()")
-
-    if(APPLE)
-      target_link_libraries(${args_LIB_NAME} PUBLIC
-        "${SCANNER_LIB_PATH}/libscanner.dylib")
-    else()
-      target_link_libraries(${args_LIB_NAME} PUBLIC
-        "${SCANNER_LIB_PATH}/libscanner.so")
-    endif()
-
-    execute_process(
-      OUTPUT_VARIABLE BUILD_FLAGS
-      COMMAND
-      python3 -c "import scannerpy.stdlib.build_flags as b; b.print_compile_flags()")
-    set_target_properties(
-      ${args_LIB_NAME} PROPERTIES
-      COMPILE_FLAGS "${BUILD_FLAGS}")
-
-    execute_process(
-      OUTPUT_VARIABLE LINK_FLAGS
-      COMMAND
-      python3 -c "import scannerpy.stdlib.build_flags as b; b.print_link_flags()")
-    set_target_properties(
-      ${args_LIB_NAME} PROPERTIES
-      LINK_FLAGS "${LINK_FLAGS}")
-  endif()
-endfunction()
 #### op.cmake ends
 
-# execute_process(
-#   OUTPUT_VARIABLE SCANNER_CMAKE_PATH
-#   COMMAND python3 -c "import scannerpy.stdlib.build_flags as b; b.print_cmake()")
-# include(${SCANNER_CMAKE_PATH})
-# message("scanner cmake ${SCANNER_CMAKE_PATH}")
+execute_process(
+  OUTPUT_VARIABLE SCANNER_CMAKE_PATH
+  COMMAND python3 -c "import scannerpy.stdlib.build_flags as b; b.print_cmake()")
+include(${SCANNER_CMAKE_PATH})
+message("scanner cmake ${SCANNER_CMAKE_PATH}")
 
 # build_op will create a shared library called lib${LIB_NAME}.so that builds
 # from all of the CPP_SRCS. You can also optionally specify a PROTO_SRC that
@@ -112,6 +55,11 @@ build_op(
 build_op(
   LIB_NAME incremental_mapping
   CPP_SRCS incremental_mapping.cc
+)
+
+build_op(
+  LIB_NAME merge_mapping
+  CPP_SRCS merge_mapping.cc
 )
 
 include_directories(${COLMAP_INCLUDE_DIRS})
@@ -140,3 +88,6 @@ target_link_libraries(sequential_matching PUBLIC ${MYLIB})
 
 target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
 target_link_libraries(incremental_mapping PUBLIC ${MYLIB})
+
+target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
+target_link_libraries(merge_mapping PUBLIC ${MYLIB})

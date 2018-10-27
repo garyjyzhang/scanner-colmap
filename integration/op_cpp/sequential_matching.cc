@@ -148,12 +148,16 @@ public:
 
     for (int i = 1; i < image_ids.size(); i++) {
       image_t image_id2 = image_ids[i];
-      if (image_id2 == image_id1)
+      if (image_id2 == image_id1 ||
+          std::count(pair_image_ids.begin(), pair_image_ids.end(), image_id2) >
+              0)
         continue;
 
       pair_image_ids.push_back(image_id2);
       FeatureDescriptors descriptors2 = descriptors_list[i];
       FeatureKeypoints keypoints2 = keypoints_list[i];
+      std::cout << "feature keypoints 2 size: " << keypoints2.size()
+                << std::endl;
 
       std::cout << "matching image " << image_id1 << " with image " << image_id2
                 << std::endl;
@@ -172,24 +176,22 @@ public:
 
       if (featureMatches.size() <
           static_cast<size_t>(sift_options_.min_num_inliers)) {
-        printf("FeatureMatches for %d and %d has too few inliers", image_id1,
+        printf("FeatureMatches for %d and %d has too few inliers\n", image_id1,
                image_id2);
         featureMatches.clear();
       }
 
+      printf("View geometry for #%d and #%d has %ld inliers\n", image_id1,
+             image_id2, two_view_geometry.inlier_matches.size());
       if (two_view_geometry.inlier_matches.size() <
           static_cast<size_t>(sift_options_.min_num_inliers)) {
-        printf("View geometry for %d and %d has too few inliers", image_id1,
+        printf("View geometry for %d and %d has too few inliers\n", image_id1,
                image_id2);
         two_view_geometry = TwoViewGeometry();
       }
 
       // feature_matches_list.push_back(featureMatches);
       two_view_geometry_list.push_back(two_view_geometry);
-      for (auto &featureMatch : two_view_geometry.inlier_matches) {
-        std::cout << "feature match: " << featureMatch.point2D_idx1 << " "
-                  << featureMatch.point2D_idx2 << std::endl;
-      }
     }
 
     // write matching result to output column

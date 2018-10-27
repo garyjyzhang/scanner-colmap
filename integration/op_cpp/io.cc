@@ -2,8 +2,11 @@
 #include "scanner/util/common.h"
 
 #include <colmap/base/database.h>
+#include <colmap/base/reconstruction.h>
 #include <colmap/feature/types.h>
 #include <colmap/feature/utils.h>
+#include <colmap/util/misc.h>
+#include <stdlib.h>
 
 using colmap::Camera;
 using colmap::FeatureDescriptors;
@@ -11,6 +14,7 @@ using colmap::FeatureKeypoint;
 using colmap::FeatureKeypoints;
 using colmap::FeatureMatch;
 using colmap::FeatureMatches;
+using colmap::Reconstruction;
 using colmap::TwoViewGeometry;
 
 using scanner::insert_element;
@@ -69,6 +73,18 @@ template <typename T> void writeSingleToColumn(Elements &col, T &data) {
 template <typename T> void writeSingleToElement(Element &element, T &data) {
   Buffer buffer = createSingleBuffer(data);
   insert_element(element, buffer.data, buffer.size);
+}
+
+// write a single element to column and insert extra refs - 1 empty elements
+template <typename T>
+void writeSingleAndFillColumn(Elements &col, T &data, int refs) {
+  size_t byte_size = sizeof(T);
+  u8 *buffer = new_block_buffer(DEVICE, byte_size, refs);
+  memcpy(buffer, &data, byte_size);
+  insert_element(col, buffer, byte_size);
+  for (int i = 1; i < refs; i++) {
+    insert_element(col, buffer, 0);
+  }
 }
 
 FeatureDescriptors ReadDescriptorsFromElement(const Element &elememt) {
@@ -253,67 +269,67 @@ void writeFeatureMatchesListToColumn(Elements &col,
 // read and write for two view geometries
 vector<TwoViewGeometry> readTwoViewGeometries(const Element &element) {
   u8 *buffer = element.buffer;
+  size_t total_byte_size;
+  buffer = readSingleFromBuffer<size_t>(buffer, &total_byte_size);
 
-  size_t total_byte_size = readSingleFromBuffer<size_t>(buffer);
-  buffer += sizeof(total_byte_size);
-  size_t num_geometris = readSingleFromBuffer<size_t>(buffer);
-  buffer += sizeof(num_geometris);
-  size_t object_byte_size = num_geometris * sizeof(TwoViewGeometry);
+  int num_geometries;
+  buffer = readSingleFromBuffer<int>(buffer, &num_geometries);
 
-  // read tvg objects
-  vector<TwoViewGeometry> tvgs(
-      reinterpret_cast<TwoViewGeometry *>(buffer),
-      reinterpret_cast<TwoViewGeometry *>(buffer + object_byte_size));
-  buffer += object_byte_size;
+  vector<TwoViewGeometry> tvgs(num_geometries);
 
-  // read feature matches
-  for (int i = 0; i < num_geometris; i++) {
-    size_t num_matches = readSingleFromBuffer<size_t>(buffer);
-    buffer += sizeof(num_matches);
+  for (int i = 0; i < num_geometries; i++) {
+    TwoViewGeometry &tvg = tvgs[i];
+    buffer = readSingleFromBuffer<int>(buffer, &(tvg.config));
+    buffer = readSingleFromBuffer<Eigen::Matrix3d>(buffer, &(tvg.E));
+    buffer = readSingleFromBuffer<Eigen::Matrix3d>(buffer, &(tvg.F));
+    buffer = readSingleFromBuffer<Eigen::Matrix3d>(buffer, &(tvg.H));
+    buffer = readSingleFromBuffer<Eigen::Vector4d>(buffer, &(tvg.qvec));
+    buffer = readSingleFromBuffer<Eigen::Vector3d>(buffer, &(tvg.tvec));
+    buffer = readSingleFromBuffer<double>(buffer, &(tvg.tri_angle));
 
-    size_t matches_byte_size = num_matches * sizeof(FeatureMatch);
-    tvgs[i].inlier_matches = vector<FeatureMatch>(
-        reinterpret_cast<FeatureMatch *>(buffer),
-        reinterpret_cast<FeatureMatch *>(buffer + matches_byte_size));
-    buffer += matches_byte_size;
+    buffer =
+        readVectorFromBuffer<FeatureMatches>(buffer, &(tvg.inlier_matches));
   }
 
   assert(buffer == element.buffer + total_byte_size);
   return tvgs;
 }
 
-// Create a buffer for a list of two view geometries
-// need to store the object and the feature matches separately
+// Create a buffer for a list of two view geometries in two passes
 Buffer createTwoViewGeometryListBuffer(
     vector<TwoViewGeometry> &two_view_geometry_list) {
-  size_t index_byte_size = sizeof(size_t);
-  size_t num_geometries = two_view_geometry_list.size();
-  size_t total_byte_size = 0;
-  size_t object_byte_size = sizeof(TwoViewGeometry) * num_geometries;
+  int num_geometries = two_view_geometry_list.size();
+  size_t total_byte_size = sizeof(num_geometries);
 
-  // total byte size + num_geometris + geometry objects
-  total_byte_size += index_byte_size * 2 + object_byte_size;
+  for (TwoViewGeometry &tvg : two_view_geometry_list) {
+    total_byte_size += sizeof(tvg.config) + sizeof(tvg.E) + sizeof(tvg.F) +
+                       sizeof(tvg.H) + sizeof(tvg.qvec) + sizeof(tvg.tvec) +
+                       sizeof(tvg.tri_angle);
 
-  for (int i = 0; i < num_geometries; i++) {
-    FeatureMatches &matches = two_view_geometry_list[i].inlier_matches;
-    // feature matches data
-    total_byte_size += index_byte_size + matches.size() * sizeof(FeatureMatch);
+    size_t num_matches = tvg.inlier_matches.size();
+    total_byte_size += sizeof(num_matches) + num_matches * sizeof(FeatureMatch);
   }
+
+  total_byte_size += sizeof(total_byte_size);
 
   u8 *buffer = new_buffer(DEVICE, total_byte_size), *pointer = buffer;
 
   // write total byte size for read validation
   pointer = copy_object_to_buffer(pointer, total_byte_size);
-
   pointer = copy_object_to_buffer(pointer, num_geometries);
 
-  pointer = copy_buffer_to_buffer(pointer, two_view_geometry_list.data(),
-                                  object_byte_size);
+  for (TwoViewGeometry &tvg : two_view_geometry_list) {
+    pointer = copy_object_to_buffer(pointer, tvg.config);
+    pointer = copy_object_to_buffer(pointer, tvg.E);
+    pointer = copy_object_to_buffer(pointer, tvg.F);
+    pointer = copy_object_to_buffer(pointer, tvg.H);
+    pointer = copy_object_to_buffer(pointer, tvg.qvec);
+    pointer = copy_object_to_buffer(pointer, tvg.tvec);
+    pointer = copy_object_to_buffer(pointer, tvg.tri_angle);
 
-  for (int i = 0; i < num_geometries; i++) {
-    FeatureMatches &matches = two_view_geometry_list[i].inlier_matches;
+    FeatureMatches &matches = tvg.inlier_matches;
     size_t num_matches = matches.size();
-    size_t data_byte_size = matches.size() * sizeof(FeatureMatch);
+    size_t data_byte_size = num_matches * sizeof(FeatureMatch);
 
     pointer = copy_object_to_buffer(pointer, num_matches);
     pointer = copy_buffer_to_buffer(pointer, matches.data(), data_byte_size);
@@ -403,4 +419,69 @@ FeatureKeypoints readKeypointsFromElement(const Element &element) {
           buffer + num_keypoints * sizeof(FeatureKeypoint)));
 
   return keypoints;
+}
+
+Buffer createFileBuffer(std::string path, int refs) {
+  std::ifstream file(path, std::ios::binary);
+  CHECK(file.is_open());
+
+  file.seekg(0, file.end);
+  size_t data_byte_size = file.tellg();
+  file.seekg(0, file.beg);
+
+  size_t total_byte_size = data_byte_size + sizeof(data_byte_size);
+
+  u8 *buffer = new_block_buffer(DEVICE, total_byte_size, refs),
+     *pointer = buffer;
+  pointer = copy_object_to_buffer(buffer, data_byte_size);
+  CHECK(file.read(reinterpret_cast<char *>(pointer), data_byte_size));
+  file.close();
+
+  return Buffer(buffer, total_byte_size);
+}
+
+void writeBinaryFileToColumn(Elements &column, std::string path, int refs) {
+  Buffer buffer = createFileBuffer(path, refs);
+  insert_element(column, buffer.data, buffer.size);
+  for (int i = 1; i < refs; i++) {
+    insert_element(column, buffer.data, 0);
+  }
+}
+
+void insertEmptyToColumn(Elements &column) {
+  insert_element(column, nullptr, 0);
+}
+
+void writeReconstructionToColumns(Elements &cameras, Elements &images,
+                                  Elements &points3d, std::string path,
+                                  int refs) {
+  writeBinaryFileToColumn(cameras, path + "/cameras.bin", refs);
+  writeBinaryFileToColumn(images, path + "/images.bin", refs);
+  writeBinaryFileToColumn(points3d, path + "/points3D.bin", refs);
+}
+
+void writeBinaryToFile(const Element &element, std::string path) {
+  u8 *buffer = element.buffer;
+  size_t size;
+  buffer = readSingleFromBuffer<size_t>(buffer, &size);
+
+  std::ofstream file(path, std::ios::binary);
+  CHECK(file.write(reinterpret_cast<char *>(buffer), size));
+  file.close();
+}
+
+void loadReconstruction(const Element &cameras, const Element &images,
+                        const Element &points3d,
+                        Reconstruction &reconstruction) {
+  // use the address of reconstruction object as tmp file id
+  size_t addr = reinterpret_cast<size_t>(&reconstruction);
+  std::string tmp_path = std::to_string(addr);
+  colmap::CreateDirIfNotExists(tmp_path);
+
+  writeBinaryToFile(cameras, tmp_path + "/cameras.bin");
+  writeBinaryToFile(images, tmp_path + "/images.bin");
+  writeBinaryToFile(points3d, tmp_path + "/points3D.bin");
+
+  reconstruction.ReadBinary(tmp_path);
+  CHECK_EQ(system(("rm -rf " + tmp_path).c_str()), 0);
 }
