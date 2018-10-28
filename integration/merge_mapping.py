@@ -8,13 +8,15 @@ from scannerpy import ProtobufGenerator, Config
 
 arg_parser = argparse.ArgumentParser(
     description='Merge all the submodels from the input table, currently performs linear merging on all the submodels')
+arg_parser.add_argument('--scanner_config', dest='scanner_config',
+                        help='the path to the scanner config file')
 arg_parser.add_argument('--input_table', dest='input_table', default='submodels',
                         help='the input table where submodels are stored')
 arg_parser.add_argument('--output_table', dest='output_table',
                         help='the name of the output table', default='models')
 args = arg_parser.parse_args()
 
-db = Database()
+db = Database(config_path=args.scanner_config)
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 

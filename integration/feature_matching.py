@@ -7,6 +7,8 @@ from scannerpy import ProtobufGenerator, Config
 
 arg_parser = argparse.ArgumentParser(
     description='Perform feature matching on the input keypoints.')
+arg_parser.add_argument('--scanner_config', dest='scanner_config',
+                        help='the path to the scanner config file')
 arg_parser.add_argument('--input_table', dest='input_table', default='extraction',
                         help='the input table where the frames and frame ids are stored')
 arg_parser.add_argument('--output_table', dest='output_table',
@@ -17,7 +19,7 @@ arg_parser.add_argument(
     '--packet_size', dest='packet_size', type=int, default=25, help='the number of frames to dispatch to each feature matching kernel')
 args = arg_parser.parse_args()
 
-db = Database()
+db = Database(config_path=args.scanner_config)
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 db.load_op(

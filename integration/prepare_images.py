@@ -7,13 +7,15 @@ from scannerpy import ProtobufGenerator, Config
 
 arg_parser = argparse.ArgumentParser(
     description='Perform SIFT extraction on input images.')
+arg_parser.add_argument('--scanner_config', dest='scanner_config',
+                        help='the path to the scanner config file')
 arg_parser.add_argument('--image_path', dest='image_path', required=True,
                         help='the path to images, the images should be named appropriately to reflect their orders e.g. image_01.JPG, image_02.JPG')
 arg_parser.add_argument('--output_table', dest='output_table',
                         help='the name of the output table', default='frames')
 args = arg_parser.parse_args()
 
-db = Database()
+db = Database(config_path=args.scanner_config)
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 db.load_op(

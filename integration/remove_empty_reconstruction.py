@@ -7,6 +7,8 @@ from scannerpy import ProtobufGenerator, Config
 
 arg_parser = argparse.ArgumentParser(
     description='Perform feature matching on the input keypoints.')
+arg_parser.add_argument('--scanner_config', dest='scanner_config',
+                        help='the path to the scanner config file')
 arg_parser.add_argument('--input_table', dest='input_table', default='mapping',
                         help='the input table')
 arg_parser.add_argument('--output_table', dest='output_table',
@@ -15,7 +17,7 @@ arg_parser.add_argument('--stride', dest='stride', required=True,
                         help='the sampling frequency', type=int)
 args = arg_parser.parse_args()
 
-db = Database()
+db = Database(config_path=args.scanner_config)
 
 cluster_id_src = db.sources.Column()
 cameras_src = db.sources.Column()

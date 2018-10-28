@@ -7,6 +7,8 @@ from scannerpy import ProtobufGenerator, Config
 
 arg_parser = argparse.ArgumentParser(
     description='Perform colmap sparse reconstruction on the input images. the image data are organized into clusters and used to built submodels that can be merged later on.')
+arg_parser.add_argument('--scanner_config', dest='scanner_config',
+                        help='the path to the scanner config file')
 arg_parser.add_argument('--extraction_table', dest='extraction_table', default='extraction',
                         help='the output table of extraction kernel')
 arg_parser.add_argument('--matching_table', dest='matching_table', default='matching',
@@ -21,7 +23,7 @@ arg_parser.add_argument('--cluster_overlap', dest='cluster_overlap', default=5,
                         type=int, help='the number of key images that adjacent cluster share')
 args = arg_parser.parse_args()
 
-db = Database()
+db = Database(config_path=args.scanner_config)
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
