@@ -2,7 +2,7 @@
 
 Scanner-colmap implements Colmap's 3D reconstruction pipeline into the Scanner video/image analysis system. The combination allows Colmap to scale to large image collections or even directly from video inputs. The tool is still under development, the current progress is up to the sparse reconstruction step. At this moment, scanner-colmap can only be run with CPU's. 
 
-**Installation:**
+##Installation:
 The tool can be accessed from the pre-built docker image:
 ```
 docker pull garyzhang830/scanner-colmap
@@ -16,5 +16,5 @@ It is recommended that you mount a volume containing your project files such as 
 
 
 Alternatively, you can choose to install the dependencies and build scanner-colmap from source. First make sure you have Scanner and Colmap installed:
-[Scanner](http://scanner.run/installation.html)
-[Colmap](https://colmap.github.io/install.html)
+- [Scanner](http://scanner.run/installation.html)
+- [Colmap](https://colmap.github.io/install.html)
