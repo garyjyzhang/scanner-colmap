@@ -73,10 +73,8 @@ find_library(SQLITE3_LIB sqlite3 HINTS ${COLMAP_LINK_DIRS})
 find_library(SIFT_GPU_LIB sift_gpu HINTS ${COLMAP_LINK_DIRS})
 find_library(VLFEAT_LIB vlfeat HINTS ${COLMAP_LINK_DIRS})
 
-SET (COLMAP_LIB_WHOLE_ARCHIVE -Wl,--whole-archive ${COLMAP_LIBRARIES} -Wl,--no-whole-archive)
-
 SET (
-  COLMAP_SHARED_LIB
+  COLMAP_STATIC_LIB
   ${COLMAP_LIB}
   ${FLANN_LIB}
   ${GRACLUS_LIB}
@@ -88,18 +86,15 @@ SET (
   ${VLFEAT_LIB}
 )
 
+SET(STATIC_WHOLE_ARCHIVE -Wl,--whole-archive ${COLMAP_STATIC_LIB} -Wl,--no-whole-archive)
 
-# target_link_libraries(prepare_image PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(prepare_image PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE} ${COLMAP_SHARED_LIB})
+# remove these from the list of libraries, as we want the linker to use
+# the static libraries from above
+list(REMOVE_ITEM COLMAP_LIBRARIES colmap flann graclus lsd pba poisson_recon sqlite3 sift_gpu vlfeat)
+SET(COLMAP_LIBRARIES ${STATIC_WHOLE_ARCHIVE} ${COLMAP_LIBRARIES})
 
-target_link_libraries(extraction_op PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(extraction_op PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
-
-target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
-
-target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
-
-target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
+target_link_libraries(prepare_image PUBLIC ${COLMAP_LIBRARIES})
+target_link_libraries(extraction_op PUBLIC ${COLMAP_LIBRARIES})
+target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIBRARIES})
+target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIBRARIES})
+target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIBRARIES})

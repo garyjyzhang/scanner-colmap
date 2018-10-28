@@ -11,7 +11,7 @@ arg_parser.add_argument('--input_table', dest='input_table', default='mapping',
                         help='the input table')
 arg_parser.add_argument('--output_table', dest='output_table',
                         help='the name of the output table', default='submodels')
-arg_parser.add_argument('--stride', dest='stride',
+arg_parser.add_argument('--stride', dest='stride', required=True,
                         help='the sampling frequency', type=int)
 args = arg_parser.parse_args()
 
