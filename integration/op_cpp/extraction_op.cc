@@ -60,10 +60,6 @@ public:
     camera->SetWidth(static_cast<size_t>(bitmap->Width()));
     camera->SetHeight(static_cast<size_t>(bitmap->Height()));
 
-    // if (!camera->VerifyParams()) {
-    //   return Status::CAMERA_PARAM_ERROR;
-    // }
-
     camera->SetCameraId(image_id);
   }
 
@@ -77,7 +73,7 @@ public:
     auto &image_id_col = input_cols[0];
     auto &frame_col = input_cols[1];
 
-    size_t image_id = readSingleFromElement<size_t>(image_id_col);
+    size_t image_id = read_single_from_element<size_t>(image_id_col);
 
     check_frame(scanner::CPU_DEVICE, frame_col);
 
@@ -104,24 +100,23 @@ public:
     resizeBitmap(bitmap_grey, siftOptions.max_image_size);
 
     // start SIFT extraction process
-    std::cout << "starting extraction..." << std::endl;
+    printf("start extraction on image #%ld\n", image_id);
     colmap::FeatureKeypoints keypoints;
     colmap::FeatureDescriptors descriptors;
 
     colmap::ExtractSiftFeaturesCPU(siftOptions, bitmap_grey, &keypoints,
                                    &descriptors);
 
-    std::cout << "extraction complete" << std::endl;
-    // SIFT extraction end
+    printf("finished extraction on image #%ld\n", image_id);
 
     // Creating a separate camera for each image due to lack of db
     Camera camera;
     extractCamera(image_id, &camera, &bitmap_grey);
 
     // write to output columns
-    writeVectorToElement(output_cols[0], keypoints);
-    writeMatrixToElement(output_cols[1], descriptors);
-    writeCameraToElement(output_cols[2], camera);
+    write_vector_to_element(output_cols[0], keypoints);
+    write_matrix_to_element(output_cols[1], descriptors);
+    write_camera_to_element(output_cols[2], camera);
   }
 };
 

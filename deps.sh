@@ -42,3 +42,15 @@ cd build
 cmake ..
 make
 make install
+
+cd /usr/local/lib/colmap
+for staticLib in ./*.a; do
+  g++ -shared -o $(basename $staticLib .a).so -Wl,--whole-archive $staticLib -Wl,--no-whole-archive
+done
+git clone https://github.com/garyjyzhang/scanner-colmap.git
+cd scanner-colmap/integration/op_cpp
+mkdir build
+cd build
+cmake ..
+make
+cd ../..

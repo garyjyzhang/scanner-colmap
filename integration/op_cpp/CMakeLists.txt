@@ -33,9 +33,6 @@ execute_process(
 include(${SCANNER_CMAKE_PATH})
 message("scanner cmake ${SCANNER_CMAKE_PATH}")
 
-# build_op will create a shared library called lib${LIB_NAME}.so that builds
-# from all of the CPP_SRCS. You can also optionally specify a PROTO_SRC that
-# points to a Protobuf file and will generate the C++ and Python bindings.
 build_op(
   LIB_NAME prepare_image
   CPP_SRCS prepare_image.cc
@@ -44,7 +41,8 @@ build_op(
 build_op(
   LIB_NAME extraction_op
   CPP_SRCS extraction_op.cc
-  PROTO_SRC siftExtraction.proto)
+  PROTO_SRC siftExtraction.proto
+)
 
 build_op(
   LIB_NAME sequential_matching
@@ -65,8 +63,6 @@ build_op(
 include_directories(${COLMAP_INCLUDE_DIRS})
 link_directories(${COLMAP_LINK_DIRS})
 
-SET (MYLIB -Wl,--whole-archive ${COLMAP_LIBRARIES} -Wl,--no-whole-archive)
-
 find_library(COLMAP_LIB colmap HINTS ${COLMAP_LINK_DIRS})
 find_library(FLANN_LIB flann HINTS ${COLMAP_LINK_DIRS})
 find_library(GRACLUS_LIB graclus HINTS ${COLMAP_LINK_DIRS})
@@ -77,17 +73,33 @@ find_library(SQLITE3_LIB sqlite3 HINTS ${COLMAP_LINK_DIRS})
 find_library(SIFT_GPU_LIB sift_gpu HINTS ${COLMAP_LINK_DIRS})
 find_library(VLFEAT_LIB vlfeat HINTS ${COLMAP_LINK_DIRS})
 
-target_link_libraries(prepare_image PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(prepare_image PUBLIC ${MYLIB})
+SET (COLMAP_LIB_WHOLE_ARCHIVE -Wl,--whole-archive ${COLMAP_LIBRARIES} -Wl,--no-whole-archive)
+
+SET (
+  COLMAP_SHARED_LIB
+  ${COLMAP_LIB}
+  ${FLANN_LIB}
+  ${GRACLUS_LIB}
+  ${LSD_LIB}
+  ${PBA_LIB}
+  ${POISSON_RECON_LIB}
+  ${SQLITE3_LIB}
+  ${SIFT_GPU_LIB}
+  ${VLFEAT_LIB}
+)
+
+
+# target_link_libraries(prepare_image PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
+target_link_libraries(prepare_image PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE} ${COLMAP_SHARED_LIB})
 
 target_link_libraries(extraction_op PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(extraction_op PUBLIC ${MYLIB})
+target_link_libraries(extraction_op PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
 
 target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(sequential_matching PUBLIC ${MYLIB})
+target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
 
 target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(incremental_mapping PUBLIC ${MYLIB})
+target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})
 
 target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIB} ${FLANN_LIB} ${GRACLUS_LIB} ${LSD_LIB} ${PBA_LIB} ${POISSON_RECON_LIB} ${SQLITE3_LIB} ${SIFT_GPU_LIB} ${VLFEAT_LIB})
-target_link_libraries(merge_mapping PUBLIC ${MYLIB})
+target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIB_WHOLE_ARCHIVE})

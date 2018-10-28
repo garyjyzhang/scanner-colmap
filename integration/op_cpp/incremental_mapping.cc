@@ -200,9 +200,8 @@ public:
     std::vector<image_t> pivot_image_ids;
 
     for (int i = 0; i < image_id_stencil.size(); i++) {
-      std::cout << "start reading image id" << std::endl;
       // load image id
-      image_t image_id = readSingleFromElement<image_t>(image_id_stencil[i]);
+      image_t image_id = read_single_from_element<image_t>(image_id_stencil[i]);
 
       // the first num_pivot_images are pivots
       if (i < num_pivot_images) {
@@ -211,7 +210,7 @@ public:
 
       // load camera
       colmap::Camera camera;
-      readCameraFromElement(camera_stencil[i], &camera);
+      read_camera_from_element(camera_stencil[i], &camera);
       if (!db.ExistsCamera(camera.CameraId())) {
         db.WriteCamera(camera, true);
         printf("Loaded camera #%d into db\n", camera.CameraId());
@@ -221,7 +220,7 @@ public:
 
       if (!db.ExistsImage(image_id)) {
         // load keypoint
-        auto keypoints = readKeypointsFromElement(keypoints_stencil[i]);
+        auto keypoints = read_keypoints_from_element(keypoints_stencil[i]);
         // create image
         Image image = createImage(image_id, camera.CameraId(), keypoints);
 
@@ -240,12 +239,12 @@ public:
 
       // load pairs
       PairImageIds pair_image_ids =
-          readVectorFromElement<PairImageIds>(pair_image_id_stencil[i]);
+          read_vector_from_element<PairImageIds>(pair_image_id_stencil[i]);
       printf("Read %ld pair ids\n", pair_image_ids.size());
 
       // load two view geometries
       vector<TwoViewGeometry> two_view_geometries =
-          readTwoViewGeometries(two_view_geometry_stencil[i]);
+          read_two_view_geometries(two_view_geometry_stencil[i]);
       printf("Read %ld tvgs\n", two_view_geometries.size());
 
       // number of pairs must be equal to number of tvgs, since they are 1-to-1
@@ -278,7 +277,7 @@ public:
     std::cout << "num pivot images: " << num_pivot_images << std::endl;
     // the id of the cluster is caculated by first_image_id / cluster size
     // which should be unique if the batch size is consistent
-    int cluster_id = readSingleFromElement<size_t>(image_id_stencil[0]);
+    int cluster_id = read_single_from_element<size_t>(image_id_stencil[0]);
     std::string tmp_db_path = std::to_string(cluster_id) + kTempDatabasePath;
 
     IncrementalMapperOptions options;
@@ -368,9 +367,9 @@ public:
     colmap::CreateDirIfNotExists(save_dir);
     reconstruction.Write(save_dir);
 
-    writeSingleAndFillColumn<int>(output_cols[0], cluster_id, batch_size);
-    writeReconstructionToColumns(output_cols[1], output_cols[2], output_cols[3],
-                                 save_dir, batch_size);
+    write_single_and_fill_column<int>(output_cols[0], cluster_id, batch_size);
+    write_reconstruction_to_columns(output_cols[1], output_cols[2],
+                                    output_cols[3], save_dir, batch_size);
   }
 };
 

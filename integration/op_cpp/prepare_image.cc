@@ -14,7 +14,7 @@ public:
   void execute(const scanner::Elements &input_cols,
                scanner::Elements &output_cols) override {
 
-    writeSingleToElement<size_t>(output_cols[0], id_counter_);
+    write_single_to_element<size_t>(output_cols[0], id_counter_);
     id_counter_++;
   }
 

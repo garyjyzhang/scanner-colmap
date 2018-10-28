@@ -24,20 +24,6 @@ using colmap::TwoViewGeometry;
 
 using scanner::u8;
 // Kernel for Colmap sequential feature matching.
-// Expect a stencil of images.
-// Matches the center image to all other images in the window
-//
-// +-------------------------------+-----------------------> images[i]
-//                      ^          |           ^
-//                      |   Current image[i]   |
-//                      |          |           |
-//                      +----------+-----------+
-//                                 |
-//                        Match image_i against
-//
-//                    image_[i - o, i + o]        with o = [1 .. overlap]
-//
-// config:
 class SequentialMatchingCPUKernel : public scanner::StenciledBatchedKernel,
                                     public scanner::VideoKernel {
 public:
@@ -127,23 +113,27 @@ public:
 
     // read in image ids, descriptors, and keypoints
     for (int i = 0; i < image_id_stencil.size(); i++) {
-      image_ids.push_back(readSingleFromElement<image_t>(image_id_stencil[i]));
+      image_ids.push_back(
+          read_single_from_element<image_t>(image_id_stencil[i]));
       keypoints_list.push_back(
-          readVectorFromElement<FeatureKeypoints>(keypoint_stencil[i]));
+          read_vector_from_element<FeatureKeypoints>(keypoint_stencil[i]));
       descriptors_list.push_back(
-          ReadMatrixFromElement<FeatureDescriptors>(descriptor_stencil[i]));
-
-      std::cout << "Read image id: " << image_ids[i] << std::endl;
+          read_matrix_from_element<FeatureDescriptors>(descriptor_stencil[i]));
     }
-    std::cout << "stencil size: " << image_ids.size() << std::endl;
 
     // left-most image to match with every other image
     image_t image_id1 = image_ids[0];
     FeatureDescriptors &descriptors1 = descriptors_list[0];
     FeatureKeypoints &keypoints1 = keypoints_list[0];
 
+    // debug info
+    printf("matching image #%d with: ", image_id1);
+    for (int i = 1; i < image_ids.size(); i++) {
+      std::cout << image_ids[i] << " ";
+    }
+    std::cout << std::endl;
+
     vector<image_t> pair_image_ids;
-    // vector<FeatureMatches> feature_matches_list;
     vector<TwoViewGeometry> two_view_geometry_list;
 
     for (int i = 1; i < image_ids.size(); i++) {
@@ -156,11 +146,8 @@ public:
       pair_image_ids.push_back(image_id2);
       FeatureDescriptors descriptors2 = descriptors_list[i];
       FeatureKeypoints keypoints2 = keypoints_list[i];
-      std::cout << "feature keypoints 2 size: " << keypoints2.size()
-                << std::endl;
 
-      std::cout << "matching image " << image_id1 << " with image " << image_id2
-                << std::endl;
+      printf("matching image #%d with image #%d\n", image_id1, image_id2);
 
       // Run matching
       FeatureMatches featureMatches;
@@ -190,14 +177,11 @@ public:
         two_view_geometry = TwoViewGeometry();
       }
 
-      // feature_matches_list.push_back(featureMatches);
       two_view_geometry_list.push_back(two_view_geometry);
     }
 
-    // write matching result to output column
-    std::cout << "inserting to columns..." << std::endl;
-    writeVectorToColumn<vector<image_t>>(output_cols[0], pair_image_ids);
-    writeTwoViewGeometryListToColumn(output_cols[1], two_view_geometry_list);
+    write_vector_to_column<vector<image_t>>(output_cols[0], pair_image_ids);
+    write_two_view_geometries_to_column(output_cols[1], two_view_geometry_list);
   }
 
 private:

@@ -17,11 +17,11 @@ using colmap::FeatureMatches;
 using colmap::Reconstruction;
 using colmap::TwoViewGeometry;
 
+using scanner::Element;
+using scanner::Elements;
 using scanner::insert_element;
 using scanner::u8;
 
-using scanner::Element;
-using scanner::Elements;
 using std::vector;
 
 #define DEVICE scanner::CPU_DEVICE
@@ -33,51 +33,65 @@ struct Buffer {
   Buffer(u8 *data, size_t size) : data(data), size(size) {}
 };
 
-// copy data to buffer and return incremented pointer
+// copy the content of the object to the buffer and return the
+// incremented buffer pointer
 template <typename T> u8 *copy_object_to_buffer(void *buffer, T &data) {
   memcpy(buffer, &data, sizeof(T));
   return static_cast<u8 *>(buffer) + sizeof(T);
 }
 
+// copy content from source buffer to destination buffer
+// return the incremented buffer pointer
 u8 *copy_buffer_to_buffer(void *dest, void *src, size_t size) {
   memcpy(dest, src, size);
   return static_cast<u8 *>(dest) + size;
 }
 
-// read and write for fixed size data
-template <typename T> T readSingleFromBuffer(u8 *buffer) {
+// read a single value of type T from the buffer
+// return the value
+template <typename T> T read_single_from_buffer(u8 *buffer) {
   return *(reinterpret_cast<T *>(buffer));
 }
 
-template <typename T> u8 *readSingleFromBuffer(u8 *buffer, T *obj_ptr) {
+// read a single value of type T from the buffer
+// return the incremented buffer
+template <typename T> u8 *read_single_from_buffer(u8 *buffer, T *obj_ptr) {
   memcpy(static_cast<void *>(obj_ptr), static_cast<void *>(buffer), sizeof(T));
   return buffer + sizeof(T);
 }
 
-template <typename T> T readSingleFromElement(const Element &element) {
-  return readSingleFromBuffer<T>(element.buffer);
+// read a single value of type T from a scanner Element object
+// return the value
+template <typename T> T read_single_from_element(const Element &element) {
+  return read_single_from_buffer<T>(element.buffer);
 }
 
-template <typename T> Buffer createSingleBuffer(T &data) {
+// create a Buffer for a single element using the scanner::new_buffer
+template <typename T> Buffer create_single_buffer(T &data) {
   size_t byte_size = sizeof(T);
   u8 *buffer = new_buffer(DEVICE, byte_size);
   memcpy(buffer, &data, byte_size);
   return Buffer(buffer, byte_size);
 }
 
-template <typename T> void writeSingleToColumn(Elements &col, T &data) {
-  Buffer buffer = createSingleBuffer(data);
+// write a single value to a scanner column
+template <typename T> void write_single_to_column(Elements &col, T &data) {
+  Buffer buffer = create_single_buffer(data);
   insert_element(col, buffer.data, buffer.size);
 }
 
-template <typename T> void writeSingleToElement(Element &element, T &data) {
-  Buffer buffer = createSingleBuffer(data);
+// write a single value to a scanner element
+template <typename T> void write_single_to_element(Element &element, T &data) {
+  Buffer buffer = create_single_buffer(data);
   insert_element(element, buffer.data, buffer.size);
 }
 
 // write a single element to column and insert extra refs - 1 empty elements
+// this is used for kernels that performs a reduction
+// a block buffer is allocated to be able to perform sampling on the output to
+// remove the empty elements
 template <typename T>
-void writeSingleAndFillColumn(Elements &col, T &data, int refs) {
+void write_single_and_fill_column(Elements &col, T &data, int refs) {
   size_t byte_size = sizeof(T);
   u8 *buffer = new_block_buffer(DEVICE, byte_size, refs);
   memcpy(buffer, &data, byte_size);
@@ -87,37 +101,11 @@ void writeSingleAndFillColumn(Elements &col, T &data, int refs) {
   }
 }
 
-FeatureDescriptors ReadDescriptorsFromElement(const Element &elememt) {
-  u8 *descriptors_buffer = elememt.buffer;
-  size_t index_size = sizeof(size_t);
-  size_t rows = *(reinterpret_cast<size_t *>(descriptors_buffer));
-  size_t cols = *(reinterpret_cast<size_t *>(descriptors_buffer + index_size));
-
-  FeatureDescriptors matrix(rows, cols);
-  size_t num_bytes =
-      matrix.size() * sizeof(typename FeatureDescriptors::Scalar);
-
-  memcpy(reinterpret_cast<u8 *>(matrix.data()),
-         descriptors_buffer + index_size * 2, num_bytes);
-
-  return matrix;
-}
-
-void writeFeatureMatchesToColumn(Elements &col, FeatureMatches &matches) {
-  size_t num_matches = matches.size();
-  size_t matches_byte_size = num_matches * sizeof(FeatureMatch);
-  size_t total_byte_size = matches_byte_size + sizeof(num_matches);
-
-  u8 *buffer = new_buffer(DEVICE, total_byte_size);
-  memcpy(buffer, &num_matches, sizeof(num_matches));
-  memcpy(buffer + sizeof(num_matches), matches.data(), matches_byte_size);
-
-  insert_element(col, buffer, total_byte_size);
-}
-
-// read and write for vector type data
-template <typename VectorType> VectorType readVectorFromBuffer(u8 *buffer) {
-  size_t size = readSingleFromBuffer<size_t>(buffer);
+// read a vector from the buffer, it is assumed that the size of the vector
+// is stored as size_t at the start of the buffer
+// return the vector
+template <typename VectorType> VectorType read_vector_from_buffer(u8 *buffer) {
+  size_t size = read_single_from_buffer<size_t>(buffer);
   buffer += sizeof(size);
 
   return VectorType(
@@ -126,9 +114,12 @@ template <typename VectorType> VectorType readVectorFromBuffer(u8 *buffer) {
           buffer + size * sizeof(typename VectorType::value_type)));
 }
 
+// read a vector from the buffer, it is assumed that the size of the vector
+// is stored as size_t at the start of the buffer
+// return the incremented buffer pointer
 template <typename VectorType>
-u8 *readVectorFromBuffer(u8 *buffer, VectorType *vector_ptr) {
-  size_t size = readSingleFromBuffer<size_t>(buffer);
+u8 *read_vector_from_buffer(u8 *buffer, VectorType *vector_ptr) {
+  size_t size = read_single_from_buffer<size_t>(buffer);
   buffer += sizeof(size);
   size_t data_byte_size = size * sizeof(typename VectorType::value_type);
 
@@ -140,11 +131,15 @@ u8 *readVectorFromBuffer(u8 *buffer, VectorType *vector_ptr) {
   return buffer + data_byte_size;
 }
 
+// read a vector type from a scanner element
+// return the read vector
 template <typename VectorType>
-VectorType readVectorFromElement(const Element &element) {
-  return readVectorFromBuffer<VectorType>(element.buffer);
+VectorType read_vector_from_element(const Element &element) {
+  return read_vector_from_buffer<VectorType>(element.buffer);
 }
 
+// create a Buffer for a vector type, a size_t is inserted at the start
+// of the buffer to indicate the size of vector
 template <typename VectorType> Buffer createVectorBuffer(VectorType &data) {
   size_t num_elements = data.size();
   size_t element_byte_size = sizeof(typename VectorType::value_type);
@@ -158,21 +153,24 @@ template <typename VectorType> Buffer createVectorBuffer(VectorType &data) {
   return Buffer(buffer, buffer_size);
 }
 
+// write a vector type to a scanner element
 template <typename VectorType>
-void writeVectorToElement(Element &output, VectorType &data) {
+void write_vector_to_element(Element &output, VectorType &data) {
   Buffer buffer = createVectorBuffer(data);
   insert_element(output, buffer.data, buffer.size);
 }
 
+// write a vector type to a scanner column
 template <typename VectorType>
-void writeVectorToColumn(Elements &col, VectorType &data) {
+void write_vector_to_column(Elements &col, VectorType &data) {
   Buffer buffer = createVectorBuffer(data);
   insert_element(col, buffer.data, buffer.size);
 }
 
-// read and write for matrix type data
+// read a matrix type from a scanner element, it is assumed that the number of
+// rows and columns of the matrix is stored at the start of the buffer
 template <typename MatrixType>
-MatrixType ReadMatrixFromElement(const Element &elememt) {
+MatrixType read_matrix_from_element(const Element &elememt) {
   u8 *buffer = elememt.buffer;
   size_t index_size = sizeof(size_t);
   size_t rows = *(reinterpret_cast<size_t *>(buffer));
@@ -187,7 +185,9 @@ MatrixType ReadMatrixFromElement(const Element &elememt) {
   return matrix;
 }
 
-template <typename MatrixType> Buffer createMatrixBuffer(MatrixType &matrix) {
+// create a Buffer for a matrix type. The number of rows and columns will be
+// stored at the start of the buffer
+template <typename MatrixType> Buffer create_matrix_buffer(MatrixType &matrix) {
   size_t rows = matrix.rows();
   size_t cols = matrix.cols();
   size_t index_size = sizeof(size_t);
@@ -203,100 +203,49 @@ template <typename MatrixType> Buffer createMatrixBuffer(MatrixType &matrix) {
   return Buffer(buffer, total_byte_size);
 }
 
+// write a matrix type to a scanner element
 template <typename MatrixType>
-void writeMatrixToElement(Element &element, MatrixType &matrix) {
-  Buffer buffer = createMatrixBuffer(matrix);
+void write_matrix_to_element(Element &element, MatrixType &matrix) {
+  Buffer buffer = create_matrix_buffer(matrix);
   insert_element(element, buffer.data, buffer.size);
 }
 
-// combine a list of buffers into one buffer
-Buffer combine_buffers(vector<Buffer> buffers) {
-  size_t total_buffer_size = 0;
-  for (int i = 0; i < buffers.size(); i++) {
-    total_buffer_size += buffers[i].size;
-  }
-
-  u8 *combined = new_buffer(DEVICE, total_buffer_size);
-  u8 *pointer = combined;
-
-  for (int i = 0; i < buffers.size(); i++) {
-    memcpy(pointer, buffers[i].data, buffers[i].size);
-    pointer += buffers[i].size;
-    delete_buffer(DEVICE, buffers[i].data);
-  }
-
-  return Buffer(combined, total_buffer_size);
-}
-
-// create buffer for a list of feature matches in two passes
-Buffer createFeatureMatchesList(vector<FeatureMatches> &matches_list) {
-  size_t size = matches_list.size();
-  size_t total_byte_size = sizeof(size);
-  size_t index_size = sizeof(size_t);
-  size_t feature_match_size = sizeof(FeatureMatch);
-
-  for (FeatureMatches &matches : matches_list) {
-    size_t num_matches = matches.size();
-    total_byte_size += index_size + num_matches * feature_match_size;
-  }
-
-  u8 *buffer = new_buffer(DEVICE, total_byte_size);
-  u8 *pointer = buffer;
-
-  memcpy(pointer, &size, index_size);
-  pointer += index_size;
-
-  for (FeatureMatches &matches : matches_list) {
-    size_t num_matches = matches.size();
-    size_t data_byte_size = num_matches * feature_match_size;
-
-    memcpy(pointer, &data_byte_size, index_size);
-    pointer += index_size;
-    memcpy(pointer, matches.data(), data_byte_size);
-    pointer += data_byte_size;
-  }
-
-  assert(pointer == buffer + total_byte_size);
-  return Buffer(buffer, total_byte_size);
-}
-
-void writeFeatureMatchesListToColumn(Elements &col,
-                                     vector<FeatureMatches> &matches_list) {
-  Buffer buffer = createFeatureMatchesList(matches_list);
-  insert_element(col, buffer.data, buffer.size);
-}
-
-// read and write for two view geometries
-vector<TwoViewGeometry> readTwoViewGeometries(const Element &element) {
+// read a list of two view geometry from a scanner element
+// the first position of the buffer should be the total byte size of for sanity
+// check the second position should be the number of tvgs
+vector<TwoViewGeometry> read_two_view_geometries(const Element &element) {
   u8 *buffer = element.buffer;
+
   size_t total_byte_size;
-  buffer = readSingleFromBuffer<size_t>(buffer, &total_byte_size);
+  buffer = read_single_from_buffer<size_t>(buffer, &total_byte_size);
 
   int num_geometries;
-  buffer = readSingleFromBuffer<int>(buffer, &num_geometries);
+  buffer = read_single_from_buffer<int>(buffer, &num_geometries);
 
   vector<TwoViewGeometry> tvgs(num_geometries);
 
   for (int i = 0; i < num_geometries; i++) {
     TwoViewGeometry &tvg = tvgs[i];
-    buffer = readSingleFromBuffer<int>(buffer, &(tvg.config));
-    buffer = readSingleFromBuffer<Eigen::Matrix3d>(buffer, &(tvg.E));
-    buffer = readSingleFromBuffer<Eigen::Matrix3d>(buffer, &(tvg.F));
-    buffer = readSingleFromBuffer<Eigen::Matrix3d>(buffer, &(tvg.H));
-    buffer = readSingleFromBuffer<Eigen::Vector4d>(buffer, &(tvg.qvec));
-    buffer = readSingleFromBuffer<Eigen::Vector3d>(buffer, &(tvg.tvec));
-    buffer = readSingleFromBuffer<double>(buffer, &(tvg.tri_angle));
+    buffer = read_single_from_buffer<int>(buffer, &(tvg.config));
+    buffer = read_single_from_buffer<Eigen::Matrix3d>(buffer, &(tvg.E));
+    buffer = read_single_from_buffer<Eigen::Matrix3d>(buffer, &(tvg.F));
+    buffer = read_single_from_buffer<Eigen::Matrix3d>(buffer, &(tvg.H));
+    buffer = read_single_from_buffer<Eigen::Vector4d>(buffer, &(tvg.qvec));
+    buffer = read_single_from_buffer<Eigen::Vector3d>(buffer, &(tvg.tvec));
+    buffer = read_single_from_buffer<double>(buffer, &(tvg.tri_angle));
 
     buffer =
-        readVectorFromBuffer<FeatureMatches>(buffer, &(tvg.inlier_matches));
+        read_vector_from_buffer<FeatureMatches>(buffer, &(tvg.inlier_matches));
   }
 
   assert(buffer == element.buffer + total_byte_size);
   return tvgs;
 }
 
-// Create a buffer for a list of two view geometries in two passes
-Buffer createTwoViewGeometryListBuffer(
+// create a Buffer for a list of two view geometries
+// the first position of the buffer will store the total byte size for sanity
+// check the second position stores the number of two view geometries
+Buffer create_two_view_geometries_buffer(
     vector<TwoViewGeometry> &two_view_geometry_list) {
   int num_geometries = two_view_geometry_list.size();
   size_t total_byte_size = sizeof(num_geometries);
@@ -339,13 +288,15 @@ Buffer createTwoViewGeometryListBuffer(
   return Buffer(buffer, total_byte_size);
 }
 
-void writeTwoViewGeometryListToColumn(Elements &col,
-                                      vector<TwoViewGeometry> &tvg_list) {
-  Buffer buffer = createTwoViewGeometryListBuffer(tvg_list);
+// write a list of two view geometries to a scanner column
+void write_two_view_geometries_to_column(Elements &col,
+                                         vector<TwoViewGeometry> &tvg_list) {
+  Buffer buffer = create_two_view_geometries_buffer(tvg_list);
   insert_element(col, buffer.data, buffer.size);
 }
 
-Buffer createCameraBuffer(Camera &camera) {
+// create a Buffer for a colmap scanner object
+Buffer create_camera_buffer(Camera &camera) {
   colmap::camera_t camera_id = camera.CameraId();
   int model_id = camera.ModelId();
   size_t width = camera.Width();
@@ -375,12 +326,14 @@ Buffer createCameraBuffer(Camera &camera) {
   return Buffer(buffer, total_byte_size);
 }
 
-void writeCameraToElement(Element &element, Camera &camera) {
-  Buffer buffer = createCameraBuffer(camera);
+// write a colmap camera object to scanner element
+void write_camera_to_element(Element &element, Camera &camera) {
+  Buffer buffer = create_camera_buffer(camera);
   insert_element(element, buffer.data, buffer.size);
 }
 
-void readCameraFromElement(const Element &element, Camera *camera) {
+// read a colmap camera object from a scanner element
+void read_camera_from_element(const Element &element, Camera *camera) {
   u8 *buffer = element.buffer;
   size_t total_byte_size;
   colmap::camera_t camera_id;
@@ -390,14 +343,14 @@ void readCameraFromElement(const Element &element, Camera *camera) {
   vector<double> params;
   bool prior_focal_length;
 
-  buffer = readSingleFromBuffer<size_t>(buffer, &total_byte_size);
-  buffer = readSingleFromBuffer<colmap::camera_t>(buffer, &camera_id);
-  buffer = readSingleFromBuffer<int>(buffer, &model_id);
-  buffer = readSingleFromBuffer<size_t>(buffer, &width);
-  buffer = readSingleFromBuffer<size_t>(buffer, &height);
-  buffer = readSingleFromBuffer<bool>(buffer, &prior_focal_length);
+  buffer = read_single_from_buffer<size_t>(buffer, &total_byte_size);
+  buffer = read_single_from_buffer<colmap::camera_t>(buffer, &camera_id);
+  buffer = read_single_from_buffer<int>(buffer, &model_id);
+  buffer = read_single_from_buffer<size_t>(buffer, &width);
+  buffer = read_single_from_buffer<size_t>(buffer, &height);
+  buffer = read_single_from_buffer<bool>(buffer, &prior_focal_length);
 
-  buffer = readVectorFromBuffer<vector<double>>(buffer, &(camera->Params()));
+  buffer = read_vector_from_buffer<vector<double>>(buffer, &(camera->Params()));
 
   assert(buffer == element.buffer + total_byte_size);
 
@@ -408,10 +361,13 @@ void readCameraFromElement(const Element &element, Camera *camera) {
   camera->SetPriorFocalLength(prior_focal_length);
 }
 
-FeatureKeypoints readKeypointsFromElement(const Element &element) {
+// read a list of colmap keypoints from scanner element
+// it is assumed that the first position of the buffer stores the number of
+// keypoints as size_t
+FeatureKeypoints read_keypoints_from_element(const Element &element) {
   u8 *buffer = element.buffer;
   size_t num_keypoints;
-  buffer = readSingleFromBuffer<size_t>(buffer, &num_keypoints);
+  buffer = read_single_from_buffer<size_t>(buffer, &num_keypoints);
 
   colmap::FeatureKeypoints keypoints(
       reinterpret_cast<FeatureKeypoint *>(buffer),
@@ -421,7 +377,9 @@ FeatureKeypoints readKeypointsFromElement(const Element &element) {
   return keypoints;
 }
 
-Buffer createFileBuffer(std::string path, int refs) {
+// write a binary file to scanner column
+// this function will also fill the column with refs number of empty elements
+void write_binary_file_to_column(Elements &column, std::string path, int refs) {
   std::ifstream file(path, std::ios::binary);
   CHECK(file.is_open());
 
@@ -431,57 +389,39 @@ Buffer createFileBuffer(std::string path, int refs) {
 
   size_t total_byte_size = data_byte_size + sizeof(data_byte_size);
 
+  // use block buffer here because we want to insert empty elements into the
+  // column, which will be removed in the subsequent sampling stepts
   u8 *buffer = new_block_buffer(DEVICE, total_byte_size, refs),
      *pointer = buffer;
   pointer = copy_object_to_buffer(buffer, data_byte_size);
   CHECK(file.read(reinterpret_cast<char *>(pointer), data_byte_size));
   file.close();
 
-  return Buffer(buffer, total_byte_size);
-}
-
-void writeBinaryFileToColumn(Elements &column, std::string path, int refs) {
-  Buffer buffer = createFileBuffer(path, refs);
-  insert_element(column, buffer.data, buffer.size);
+  insert_element(column, buffer, total_byte_size);
   for (int i = 1; i < refs; i++) {
-    insert_element(column, buffer.data, 0);
+    insert_element(column, buffer, 0);
   }
 }
 
-void insertEmptyToColumn(Elements &column) {
-  insert_element(column, nullptr, 0);
+// write a reconstruction to 3 separate columns for cameras, images and points3d
+// note that the columns will be filled with refs empty columns at the end
+void write_reconstruction_to_columns(Elements &cameras, Elements &images,
+                                     Elements &points3d, std::string path,
+                                     int refs) {
+  write_binary_file_to_column(cameras, path + "/cameras.bin", refs);
+  write_binary_file_to_column(images, path + "/images.bin", refs);
+  write_binary_file_to_column(points3d, path + "/points3D.bin", refs);
 }
 
-void writeReconstructionToColumns(Elements &cameras, Elements &images,
-                                  Elements &points3d, std::string path,
-                                  int refs) {
-  writeBinaryFileToColumn(cameras, path + "/cameras.bin", refs);
-  writeBinaryFileToColumn(images, path + "/images.bin", refs);
-  writeBinaryFileToColumn(points3d, path + "/points3D.bin", refs);
-}
-
-void writeBinaryToFile(const Element &element, std::string path) {
+// write the binary content within a scanner element to a file
+// this is used to read reconstruction from scanner using colmap's
+// builtin reconstruction reader. Hacky but the easiest way to achieve that.
+void write_binary_to_file(const Element &element, std::string path) {
   u8 *buffer = element.buffer;
   size_t size;
-  buffer = readSingleFromBuffer<size_t>(buffer, &size);
+  buffer = read_single_from_buffer<size_t>(buffer, &size);
 
   std::ofstream file(path, std::ios::binary);
   CHECK(file.write(reinterpret_cast<char *>(buffer), size));
   file.close();
-}
-
-void loadReconstruction(const Element &cameras, const Element &images,
-                        const Element &points3d,
-                        Reconstruction &reconstruction) {
-  // use the address of reconstruction object as tmp file id
-  size_t addr = reinterpret_cast<size_t>(&reconstruction);
-  std::string tmp_path = std::to_string(addr);
-  colmap::CreateDirIfNotExists(tmp_path);
-
-  writeBinaryToFile(cameras, tmp_path + "/cameras.bin");
-  writeBinaryToFile(images, tmp_path + "/images.bin");
-  writeBinaryToFile(points3d, tmp_path + "/points3D.bin");
-
-  reconstruction.ReadBinary(tmp_path);
-  CHECK_EQ(system(("rm -rf " + tmp_path).c_str()), 0);
 }

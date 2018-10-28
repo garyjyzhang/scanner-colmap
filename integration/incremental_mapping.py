@@ -1,8 +1,25 @@
 import os.path
 import sys
+import argparse
 
 from scannerpy import Database, Job
 from scannerpy import ProtobufGenerator, Config
+
+arg_parser = argparse.ArgumentParser(
+    description='Perform colmap sparse reconstruction on the input images. the image data are organized into clusters and used to built submodels that can be merged later on.')
+arg_parser.add_argument('--extraction_table', dest='extraction_table', default='extraction',
+                        help='the output table of extraction kernel')
+arg_parser.add_argument('--matching_table', dest='matching_table', default='matching',
+                        help='the output table of feature matching kernel')
+arg_parser.add_argument('--output_table', dest='output_table',
+                        help='the name of the output table', default='mapping')
+arg_parser.add_argument('--matching_overlap', dest='matching_overlap',
+                        default=10, help='the matching window size. This should be consistent with the window size used for feature matching', type=int)
+arg_parser.add_argument('--cluster_size', dest='cluster_size',
+                        default=10, help='the number of key images to use for each cluster', type=int)
+arg_parser.add_argument('--cluster_overlap', dest='cluster_overlap', default=5,
+                        type=int, help='the number of key images that adjacent cluster share')
+args = arg_parser.parse_args()
 
 db = Database()
 
@@ -12,14 +29,10 @@ db.load_op(
     os.path.join(cwd, 'op_cpp/build/libincremental_mapping.so')
 )
 
-SEQUENTIAL_MATCHING_OVERLAP = 10
-CLUSTER_SIZE = 10
-CLUSTER_OVERLAP = 5
+batch_size = args.cluster_size - args.cluster_overlap
 
-batch_size = CLUSTER_SIZE - CLUSTER_OVERLAP
-
-matching_stencil = range(0, SEQUENTIAL_MATCHING_OVERLAP + CLUSTER_SIZE)
-num_images = db.table('frames').num_rows()
+matching_stencil = range(0, args.matching_overlap + args.cluster_size)
+num_images = db.table(args.extraction_table).num_rows()
 
 image_ids = db.sources.Column()
 pair_image_ids = db.sources.Column()
@@ -32,7 +45,7 @@ cluster_id, cameras, images, points3d = db.ops.IncrementalMappingCPU(
 
 
 def remove_empty_rows(*input_cols):
-    return [db.streams.Stride(col, CLUSTER_SIZE) for col in input_cols]
+    return [db.streams.Stride(col, batch_size) for col in input_cols]
 
 
 # cluster_id, cameras, images, points3d = remove_empty_rows(cluster_id,
@@ -43,12 +56,12 @@ output = db.sinks.Column(
 
 
 job = Job(op_args={
-    image_ids: db.table('extraction').column('image_id'),
-    pair_image_ids: db.table('matching').column('pair_image_ids'),
-    two_view_geometries: db.table('matching').column('two_view_geometries'),
-    keypoints: db.table('extraction').column('keypoints'),
-    camera: db.table('extraction').column('camera'),
-    output: 'mapping'
+    image_ids: db.table(args.extraction_table).column('image_id'),
+    pair_image_ids: db.table(args.matching_table).column('pair_image_ids'),
+    two_view_geometries: db.table(args.matching_table).column('two_view_geometries'),
+    keypoints: db.table(args.extraction_table).column('keypoints'),
+    camera: db.table(args.extraction_table).column('camera'),
+    output: args.output_table
 })
 
 output_tables = db.run(output, [job], force=True)

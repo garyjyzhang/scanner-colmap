@@ -12,7 +12,7 @@
 #include <colmap/util/misc.h>
 #include <colmap/util/string.h>
 
-const double kMaxReprojError = 256.0;
+const double kMaxReprojError = 64.0;
 
 using scanner::Element;
 
@@ -21,6 +21,30 @@ class MergeMappingCPUKernel : public scanner::BatchedKernel,
 public:
   MergeMappingCPUKernel(const scanner::KernelConfig &config)
       : scanner::BatchedKernel(config) {}
+
+  // write the content of elements into binary files and use colmap's
+  // builtin reconstruction reader to recreate the reconstruction
+  // this is a litte messy but is the easiest way to get the job done
+  void loadReconstruction(const Element &cameras, const Element &images,
+                          const Element &points3d,
+                          Reconstruction &reconstruction) {
+    // use the address of reconstruction object as tmp folder name
+    size_t addr = reinterpret_cast<size_t>(&reconstruction);
+
+    std::string tmp_path = std::to_string(addr);
+    colmap::CreateDirIfNotExists(tmp_path);
+
+    // convert binary content of each element to a file
+    write_binary_to_file(cameras, tmp_path + "/cameras.bin");
+    write_binary_to_file(images, tmp_path + "/images.bin");
+    write_binary_to_file(points3d, tmp_path + "/points3D.bin");
+
+    // create the reconstruction
+    reconstruction.ReadBinary(tmp_path);
+
+    // remove the tmp files
+    CHECK_EQ(system(("rm -rf " + tmp_path).c_str()), 0);
+  }
 
   void execute(const scanner::BatchedElements &input_cols,
                scanner::BatchedElements &output_cols) override {
@@ -31,36 +55,22 @@ public:
 
     int num_models = input_cols[0].size();
 
-    // caluclate range of leaf clusters being merged
-    int initial_model = 0;
-    int num_reconstructions = 5;
-    int first_front_id =
-        readSingleFromElement<int>(cluster_id_batch[initial_model]);
-    int last_front_id = readSingleFromElement<int>(
-        cluster_id_batch[initial_model + num_reconstructions]);
+    int first_cluster_id =
+        read_single_from_element<int>(cluster_id_batch.front());
+    int last_cluster_id =
+        read_single_from_element<int>(cluster_id_batch.back());
 
     Reconstruction merged_reconstruction;
-    loadReconstruction(cameras_batch[initial_model],
-                       images_batch[initial_model],
-                       points3d_batch[initial_model], merged_reconstruction);
+    loadReconstruction(cameras_batch[0], images_batch[0], points3d_batch[0],
+                       merged_reconstruction);
 
-    for (const auto &image_id : merged_reconstruction.RegImageIds()) {
-      printf("submodel #%d has registered image: %d\n", initial_model,
-             image_id);
-    }
+    for (int i = 1; i < num_models; i++) {
+      int cluster_id = read_single_from_element<int>(cluster_id_batch[i]);
+      printf("merging submodel #%d and #%d\n", first_cluster_id, cluster_id);
 
-    for (int i = initial_model + 1; i <= initial_model + num_reconstructions;
-         i++) {
       Reconstruction reconstruction;
       loadReconstruction(cameras_batch[i], images_batch[i], points3d_batch[i],
                          reconstruction);
-      std::cout << "loaded submodel #" << i << std::endl;
-
-      for (const auto &image_id : reconstruction.RegImageIds()) {
-        printf("submodel #%d has registered image: %d\n", i, image_id);
-      }
-
-      Eigen::Matrix3x4d alignment;
 
       const auto &common_image_ids =
           merged_reconstruction.FindCommonRegImageIds(reconstruction);
@@ -68,23 +78,23 @@ public:
         printf("common image id: %d\n", image_id);
       }
 
-      // if (!colmap::ComputeAlignmentBetweenReconstructions(
-      //         reconstruction, merged_reconstruction, 0.3, kMaxReprojError,
-      //         &alignment)) {
-      //   std::cout << "no alignment!" << std::endl;
-      // }
       if (merged_reconstruction.Merge(reconstruction, kMaxReprojError))
-        printf("merged models #%d and #%d\n", 0, i);
+        printf("successfully merged models #%d and #%d\n", first_cluster_id,
+               cluster_id);
+      else
+        printf("failed to merge models #%d and #%d\n", first_cluster_id,
+               cluster_id);
     }
 
     std::string save_dir =
-        colmap::StringPrintf("%d_%d", first_front_id, last_front_id);
+        colmap::StringPrintf("%d_%d", first_cluster_id, last_cluster_id);
     colmap::CreateDirIfNotExists(save_dir);
     merged_reconstruction.Write(save_dir);
 
-    writeSingleAndFillColumn<int>(output_cols[0], first_front_id, num_models);
-    writeReconstructionToColumns(output_cols[1], output_cols[2], output_cols[3],
-                                 save_dir, num_models);
+    write_single_and_fill_column<int>(output_cols[0], first_cluster_id,
+                                      num_models);
+    write_reconstruction_to_columns(output_cols[1], output_cols[2],
+                                    output_cols[3], save_dir, num_models);
   }
 };
 
