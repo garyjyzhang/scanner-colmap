@@ -39,7 +39,7 @@ python3 prepare_image.py --image_path /path/to/images --scanner_config /path/to/
 ```
 python3 extraction.py --scanner_config /path/to/config.toml --packet_size 5
 ```
-3. Feature matching. The image features from the previous steps are used to find similarities between pairs of images and generate two view geometries. Each image is matched with the next _overlap_ images in order. A small _packet_size_ is recommended to parallelize the process
+3. Feature matching. The image features from the previous steps are used to find similarities between pairs of images and generate two view geometries. Each image is matched with the next _overlap_ images in order. A small _packet_size_ is recommended to parallelize the process.
 ```
 python3 feature_matching.py --scanner_config /path/to/config.toml --overlap 10 --packet_size 4
 ```
@@ -47,3 +47,6 @@ python3 feature_matching.py --scanner_config /path/to/config.toml --overlap 10 -
 ```
 python3 incremental_mapping.py --scanner_config /path/to/config.toml --matching_overlap 10 --cluster_size 10 --cluster_overlap 5
 ```
+
+## Image data
+If you are looking for some data to start with, Colmap provides some pretty cool [image sets](https://colmap.github.io/datasets.html)
