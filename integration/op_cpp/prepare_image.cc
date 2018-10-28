@@ -15,6 +15,8 @@ public:
                scanner::Elements &output_cols) override {
 
     write_single_to_element<size_t>(output_cols[0], id_counter_);
+    printf("processed image #%ld\n", id_counter_);
+
     id_counter_++;
   }
 
