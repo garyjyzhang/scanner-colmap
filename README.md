@@ -42,11 +42,13 @@ python3 prepare_image.py --image_path /path/to/images --scanner_config /path/to/
 ```
 python3 extraction.py --scanner_config /path/to/config.toml --packet_size 5
 ```
-3. Feature matching. The image features from the previous steps are used to find similarities between pairs of images and generate two view geometries. Each image is matched with the next _overlap_ images in order. A small _packet_size_ is recommended to parallelize the process.
+3. Feature matching. The image features from the previous steps are used to find similarities between pairs of images and generate two view geometries. Each image is matched with the next _overlap_ number of images in order. A small _packet_size_ is recommended to parallelize the process, given there is sufficient computing resources. 
 ```
 python3 feature_matching.py --scanner_config /path/to/config.toml --overlap 10 --packet_size 4
 ```
-4. Sparse reconstruction. In this step, the geometries from the previous step are merged to create sparse 3D models. The number of submodels can be controlled using the _cluster_size_ and _cluster_overlap_ parameters. The _cluster_size_ is the number of key images to use per cluster. The two view geometries of these key images obtained from last step will be unpacked and used to reconstruct the submodel. The _cluster_overlap_ specifies how many key images are shared between each submodel, this is can be increased if model merging fails in the next step.
+4. Sparse reconstruction. In this step, the geometries from the previous step are merged to create sparse 3D models. The number of submodels can be controlled using the _cluster_size_ and _cluster_overlap_ parameters. 
+
+The _cluster_size_ is the number of key images to use per cluster, where each key image is a row from the feature matching step. The two view geometries between the key images and their peer images obtained from last step will be unpacked and used to reconstruct the submodel. The _cluster_overlap_ specifies how many key images are shared between each submodel, this is can be increased if model merging fails in the next step.
 ```
 python3 incremental_mapping.py --scanner_config /path/to/config.toml --matching_overlap 10 --cluster_size 10 --cluster_overlap 5
 ```
