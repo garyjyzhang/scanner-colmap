@@ -2,6 +2,9 @@
 
 Scanner-colmap re-expresses Colmap's 3D reconstruction pipeline using the Scanner video/image analysis system. The combination allows Colmap to scale to large image collections or even directly from video inputs. The tool is still under development and improvements, the current progress is up to the sparse reconstruction step. At this moment, scanner-colmap can only be run with CPU's. 
 
+![Alt text](https://user-images.githubusercontent.com/12142904/47631345-f57fa180-db02-11e8-833e-a1134f51fb9b.png)
+The resulting model of running scanner-colmap on the [Gerrard Hall image set](https://drive.google.com/drive/folders/0B6q7-Pen0AbDTk5WM2hkUjF0Znc)
+
 ## Installation:
 The tool can be accessed from the pre-built docker image:
 ```
@@ -43,7 +46,7 @@ python3 extraction.py --scanner_config /path/to/config.toml --packet_size 5
 ```
 python3 feature_matching.py --scanner_config /path/to/config.toml --overlap 10 --packet_size 4
 ```
-4. Sparse reconstruction. In this step, the geometries from the previous steps are merged to create sparse 3D models. The number of submodels can be controlled using the _cluster_size_ and _cluster_overlap_ parameters. The _cluster_size_ is the number of key images to use per cluster. The two view geometries of these key images obtained from last step will be unpacked and used to reconstruct the submodel. The _cluster_overlap_ specifies how many key images are shared between each submodel, this is can be increased if model merging fails in the next step.
+4. Sparse reconstruction. In this step, the geometries from the previous step are merged to create sparse 3D models. The number of submodels can be controlled using the _cluster_size_ and _cluster_overlap_ parameters. The _cluster_size_ is the number of key images to use per cluster. The two view geometries of these key images obtained from last step will be unpacked and used to reconstruct the submodel. The _cluster_overlap_ specifies how many key images are shared between each submodel, this is can be increased if model merging fails in the next step.
 ```
 python3 incremental_mapping.py --scanner_config /path/to/config.toml --matching_overlap 10 --cluster_size 10 --cluster_overlap 5
 ```
