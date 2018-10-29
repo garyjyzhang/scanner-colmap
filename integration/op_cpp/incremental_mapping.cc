@@ -272,9 +272,8 @@ public:
     CHECK_GT(image_id_stencil.size(), 0);
 
     // the number of pivot images is equal to the batch size
-    int num_pivot_images = 10;
     int batch_size = input_cols[0].size();
-    std::cout << "num pivot images: " << num_pivot_images << std::endl;
+    std::cout << "num pivot images: " << batch_size << std::endl;
     // the id of the cluster is caculated by first_image_id / cluster size
     // which should be unique if the batch size is consistent
     int cluster_id = read_single_from_element<size_t>(image_id_stencil[0]);
@@ -286,7 +285,7 @@ public:
     Database db(tmp_db_path);
     LoadDatabase(db, image_id_stencil, pair_image_id_stencil,
                  two_view_geometry_stencil, keypoints_stencil, camera_stencil,
-                 num_pivot_images);
+                 batch_size);
 
     DatabaseCache cache;
     cache.Load(db, options.min_num_matches, options.ignore_watermarks,
