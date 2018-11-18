@@ -42,11 +42,11 @@ public:
 
   size_t TriangulateImage(const IncrementalMapperOptions &options,
                           const Image &image, IncrementalMapper *mapper) {
-    // std::cout << "  => Continued observations: " << image.NumPoints3D()
-    //           << std::endl;
+    std::cout << "  => Continued observations: " << image.NumPoints3D()
+              << std::endl;
     const size_t num_tris =
         mapper->TriangulateImage(options.Triangulation(), image.ImageId());
-    // std::cout << "  => Added observations: " << num_tris << std::endl;
+    std::cout << "  => Added observations: " << num_tris << std::endl;
     return num_tris;
   }
 
@@ -66,7 +66,7 @@ public:
       custom_options.solver_options.max_linear_solver_iterations = 200;
     }
 
-    // printf("Global bundle adjustment");
+    printf("Global bundle adjustment");
     if (options.ba_global_use_pba && num_reg_images >= kMinNumRegImages &&
         ParallelBundleAdjuster::IsSupported(custom_options,
                                             mapper->GetReconstruction())) {
@@ -85,18 +85,18 @@ public:
       const auto report = mapper->AdjustLocalBundle(
           options.Mapper(), ba_options, options.Triangulation(), image_id,
           mapper->GetModifiedPoints3D());
-      // std::cout << "  => Merged observations: "
-      //           << report.num_merged_observations << std::endl;
-      // std::cout << "  => Completed observations: "
-      //           << report.num_completed_observations << std::endl;
-      // std::cout << "  => Filtered observations: "
-      //           << report.num_filtered_observations << std::endl;
+      std::cout << "  => Merged observations: "
+                << report.num_merged_observations << std::endl;
+      std::cout << "  => Completed observations: "
+                << report.num_completed_observations << std::endl;
+      std::cout << "  => Filtered observations: "
+                << report.num_filtered_observations << std::endl;
       const double changed =
           (report.num_merged_observations + report.num_completed_observations +
            report.num_filtered_observations) /
           static_cast<double>(report.num_adjusted_observations);
-      // std::cout << StringPrintf("  => Changed observations: %.6f", changed)
-      //           << std::endl;
+      std::cout << StringPrintf("  => Changed observations: %.6f", changed)
+                << std::endl;
       if (changed < options.ba_local_max_refinement_change) {
         break;
       }
@@ -109,10 +109,9 @@ public:
 
   void IterativeGlobalRefinement(const IncrementalMapperOptions &options,
                                  IncrementalMapper *mapper) {
-    // printf("Retriangulation");
     CompleteAndMergeTracks(options, mapper);
-    // std::cout << "  => Retriangulated observations: "
-    //           << mapper->Retriangulate(options.Triangulation()) << std::endl;
+    std::cout << "  => Retriangulated observations: "
+              << mapper->Retriangulate(options.Triangulation()) << std::endl;
 
     for (int i = 0; i < options.ba_global_max_refinements; ++i) {
       const size_t num_observations =
@@ -123,8 +122,8 @@ public:
       num_changed_observations += FilterPoints(options, mapper);
       const double changed =
           static_cast<double>(num_changed_observations) / num_observations;
-      // std::cout << StringPrintf("  => Changed observations: %.6f", changed)
-      //           << std::endl;
+      std::cout << StringPrintf("  => Changed observations: %.6f", changed)
+                << std::endl;
       if (changed < options.ba_global_max_refinement_change) {
         break;
       }
@@ -147,16 +146,16 @@ public:
                       IncrementalMapper *mapper) {
     const size_t num_filtered_observations =
         mapper->FilterPoints(options.Mapper());
-    // std::cout << "  => Filtered observations: " << num_filtered_observations
-    //           << std::endl;
+    std::cout << "  => Filtered observations: " << num_filtered_observations
+              << std::endl;
     return num_filtered_observations;
   }
 
   size_t FilterImages(const IncrementalMapperOptions &options,
                       IncrementalMapper *mapper) {
     const size_t num_filtered_images = mapper->FilterImages(options.Mapper());
-    // std::cout << "  => Filtered images: " << num_filtered_images <<
-    // std::endl;
+    std::cout << "  => Filtered images: " << num_filtered_images <<
+    std::endl;
     return num_filtered_images;
   }
 
@@ -164,12 +163,12 @@ public:
                                 IncrementalMapper *mapper) {
     const size_t num_completed_observations =
         mapper->CompleteTracks(options.Triangulation());
-    // std::cout << "  => Merged observations: " << num_completed_observations
-    //           << std::endl;
+    std::cout << "  => Merged observations: " << num_completed_observations
+              << std::endl;
     const size_t num_merged_observations =
         mapper->MergeTracks(options.Triangulation());
-    // std::cout << "  => Completed observations: " << num_merged_observations
-    //           << std::endl;
+    std::cout << "  => Completed observations: " << num_merged_observations
+              << std::endl;
     return num_completed_observations + num_merged_observations;
   }
 

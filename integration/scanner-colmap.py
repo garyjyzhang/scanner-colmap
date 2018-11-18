@@ -1,8 +1,7 @@
 import os.path
 import sys
 
-from scannerpy import Database, Job
-from scannerpy import ProtobufGenerator, Config
+from scannerpy import Config, Database, Job, ProtobufGenerator
 
 arg_parser = argparse.ArgumentParser(
     description='Automatically run the reconstruction on the given images')
