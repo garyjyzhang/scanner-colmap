@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message MergeMappingCPUArgs {
+   int32 num_models = 1;
+}

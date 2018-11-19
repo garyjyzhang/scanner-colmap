@@ -29,7 +29,9 @@ db = Database(config_path=args.scanner_config)
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
-db.load_op(os.path.join(cwd, 'op_cpp/build/libmerge_mapping.so'))
+db.load_op(
+    os.path.join(cwd, 'op_cpp/build/libmerge_mapping.so'),
+    os.path.join(cwd, 'op_cpp/build/merge_mapping_pb2.py'))
 
 num_submodels = db.table(args.input_table).num_rows()
 print("num submodels: %d" % num_submodels)
@@ -44,7 +46,7 @@ cluster_id, cameras, images, points3d = db.ops.MergeMappingCPU(
     cameras=cameras,
     images=images,
     points3d=points3d,
-    batch=num_submodels)
+    num_models=num_submodels)
 
 output = db.sinks.Column(
     columns={

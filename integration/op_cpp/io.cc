@@ -379,7 +379,7 @@ FeatureKeypoints read_keypoints_from_element(const Element &element) {
 
 // write a binary file to scanner column
 // this function will also fill the column with refs number of empty elements
-void write_binary_file_to_column(Elements &column, std::string path, int refs) {
+void write_binary_file_to_column(Elements &column, std::string path) {
   std::ifstream file(path, std::ios::binary);
   CHECK(file.is_open());
 
@@ -391,26 +391,21 @@ void write_binary_file_to_column(Elements &column, std::string path, int refs) {
 
   // use block buffer here because we want to insert empty elements into the
   // column, which will be removed in the subsequent sampling stepts
-  u8 *buffer = new_block_buffer(DEVICE, total_byte_size, refs),
-     *pointer = buffer;
+  u8 *buffer = new_buffer(DEVICE, total_byte_size), *pointer = buffer;
   pointer = copy_object_to_buffer(buffer, data_byte_size);
   CHECK(file.read(reinterpret_cast<char *>(pointer), data_byte_size));
   file.close();
 
   insert_element(column, buffer, total_byte_size);
-  for (int i = 1; i < refs; i++) {
-    insert_element(column, buffer, 0);
-  }
 }
 
 // write a reconstruction to 3 separate columns for cameras, images and points3d
 // note that the columns will be filled with refs empty columns at the end
 void write_reconstruction_to_columns(Elements &cameras, Elements &images,
-                                     Elements &points3d, std::string path,
-                                     int refs) {
-  write_binary_file_to_column(cameras, path + "/cameras.bin", refs);
-  write_binary_file_to_column(images, path + "/images.bin", refs);
-  write_binary_file_to_column(points3d, path + "/points3D.bin", refs);
+                                     Elements &points3d, std::string path) {
+  write_binary_file_to_column(cameras, path + "/cameras.bin");
+  write_binary_file_to_column(images, path + "/images.bin");
+  write_binary_file_to_column(points3d, path + "/points3D.bin");
 }
 
 // write the binary content within a scanner element to a file

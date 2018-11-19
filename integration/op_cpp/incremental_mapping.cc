@@ -1,5 +1,7 @@
 #include "io.cc"
 
+#include "incremental_mapping.pb.h"
+
 #include "scanner/api/kernel.h"
 #include "scanner/api/op.h"
 #include "scanner/util/common.h"
@@ -38,7 +40,11 @@ class IncrementalMappingCPUKernel : public scanner::StenciledBatchedKernel,
                                     public scanner::VideoKernel {
 public:
   IncrementalMappingCPUKernel(const scanner::KernelConfig &config)
-      : scanner::StenciledBatchedKernel(config) {}
+      : scanner::StenciledBatchedKernel(config) {
+    IncrementalMappingCPUArgs args;
+    args.ParseFromArray(config.args.data(), config.args.size());
+    this->_step_size = args.step_size();
+  }
 
   size_t TriangulateImage(const IncrementalMapperOptions &options,
                           const Image &image, IncrementalMapper *mapper) {
@@ -154,8 +160,7 @@ public:
   size_t FilterImages(const IncrementalMapperOptions &options,
                       IncrementalMapper *mapper) {
     const size_t num_filtered_images = mapper->FilterImages(options.Mapper());
-    std::cout << "  => Filtered images: " << num_filtered_images <<
-    std::endl;
+    std::cout << "  => Filtered images: " << num_filtered_images << std::endl;
     return num_filtered_images;
   }
 
@@ -270,11 +275,8 @@ public:
 
     CHECK_GT(image_id_stencil.size(), 0);
 
-    // the number of pivot images is equal to the batch size
-    int batch_size = input_cols[0].size();
-    std::cout << "num pivot images: " << batch_size << std::endl;
+    std::cout << "num pivot images: " << this->_step_size << std::endl;
     // the id of the cluster is caculated by first_image_id / cluster size
-    // which should be unique if the batch size is consistent
     int cluster_id = read_single_from_element<size_t>(image_id_stencil[0]);
     std::string tmp_db_path = std::to_string(cluster_id) + kTempDatabasePath;
 
@@ -284,7 +286,7 @@ public:
     Database db(tmp_db_path);
     LoadDatabase(db, image_id_stencil, pair_image_id_stencil,
                  two_view_geometry_stencil, keypoints_stencil, camera_stencil,
-                 batch_size);
+                 this->_step_size);
 
     DatabaseCache cache;
     cache.Load(db, options.min_num_matches, options.ignore_watermarks,
@@ -365,10 +367,13 @@ public:
     colmap::CreateDirIfNotExists(save_dir);
     reconstruction.Write(save_dir);
 
-    write_single_and_fill_column<int>(output_cols[0], cluster_id, batch_size);
+    write_single_to_column<int>(output_cols[0], cluster_id);
     write_reconstruction_to_columns(output_cols[1], output_cols[2],
-                                    output_cols[3], save_dir, batch_size);
+                                    output_cols[3], save_dir);
   }
+
+private:
+  int _step_size;
 };
 
 REGISTER_OP(IncrementalMappingCPU)
@@ -381,7 +386,9 @@ REGISTER_OP(IncrementalMappingCPU)
     .output("cluster_id")
     .output("cameras_bin")
     .output("images_bin")
-    .output("points3D_bin");
+    .output("points3D_bin")
+    .protobuf_name("IncrementalMappingCPUArgs");
+;
 
 REGISTER_KERNEL(IncrementalMappingCPU, IncrementalMappingCPUKernel)
     .device(scanner::DeviceType::CPU)

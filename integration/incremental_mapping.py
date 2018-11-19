@@ -52,9 +52,11 @@ db = Database(config_path=args.scanner_config)
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
-db.load_op(os.path.join(cwd, 'op_cpp/build/libincremental_mapping.so'))
+db.load_op(
+    os.path.join(cwd, 'op_cpp/build/libincremental_mapping.so'),
+    os.path.join(cwd, 'op_cpp/build/incremental_mapping_pb2.py'))
 
-batch_size = args.cluster_size - args.cluster_overlap
+step_size = args.cluster_size - args.cluster_overlap
 
 matching_stencil = range(0, args.matching_overlap + args.cluster_size)
 num_images = db.table(args.extraction_table).num_rows()
@@ -71,16 +73,17 @@ cluster_id, cameras, images, points3d = db.ops.IncrementalMappingCPU(
     two_view_geometries=two_view_geometries,
     keypoints=keypoints,
     camera=camera,
-    batch=batch_size,
-    stencil=matching_stencil)
+    stencil=matching_stencil,
+    step_size=step_size,
+)
 
 
-def remove_empty_rows(*input_cols):
-    return [db.streams.Stride(col, batch_size) for col in input_cols]
+def sample(*input_cols):
+    return [db.streams.Stride(col, step_size) for col in input_cols]
 
 
-# cluster_id, cameras, images, points3d = remove_empty_rows(cluster_id,
-#                                                           cameras, images, points3d)
+cluster_id, cameras, images, points3d = sample(cluster_id, cameras, images,
+                                               points3d)
 
 output = db.sinks.Column(
     columns={

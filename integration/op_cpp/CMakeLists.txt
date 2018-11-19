@@ -53,11 +53,13 @@ build_op(
 build_op(
   LIB_NAME incremental_mapping
   CPP_SRCS incremental_mapping.cc
+  PROTO_SRC incremental_mapping.proto
 )
 
 build_op(
   LIB_NAME merge_mapping
   CPP_SRCS merge_mapping.cc
+  PROTO_SRC merge_mapping.proto
 )
 
 include_directories(${COLMAP_INCLUDE_DIRS})

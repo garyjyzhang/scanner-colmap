@@ -1,5 +1,7 @@
 #include "io.cc"
 
+#include "merge_mapping.pb.h"
+
 #include "scanner/api/kernel.h"
 #include "scanner/api/op.h"
 #include "scanner/util/common.h"
@@ -20,7 +22,11 @@ class MergeMappingCPUKernel : public scanner::BatchedKernel,
                               public scanner::VideoKernel {
 public:
   MergeMappingCPUKernel(const scanner::KernelConfig &config)
-      : scanner::BatchedKernel(config) {}
+      : scanner::BatchedKernel(config) {
+    MergeMappingCPUArgs args;
+    args.ParseFromArray(config.args.data(), config.args.size());
+    this->num_models_ = args.num_models();
+  }
 
   // write the content of elements into binary files and use colmap's
   // builtin reconstruction reader to recreate the reconstruction
@@ -53,8 +59,6 @@ public:
     auto &images_batch = input_cols[2];
     auto &points3d_batch = input_cols[3];
 
-    int num_models = input_cols[0].size();
-
     int first_cluster_id =
         read_single_from_element<int>(cluster_id_batch.front());
     int last_cluster_id =
@@ -64,7 +68,7 @@ public:
     loadReconstruction(cameras_batch[0], images_batch[0], points3d_batch[0],
                        merged_reconstruction);
 
-    for (int i = 1; i < num_models; i++) {
+    for (int i = 1; i < this->num_models_; i++) {
       int cluster_id = read_single_from_element<int>(cluster_id_batch[i]);
       printf("merging submodel #%d and #%d\n", first_cluster_id, cluster_id);
 
@@ -91,11 +95,13 @@ public:
     colmap::CreateDirIfNotExists(save_dir);
     merged_reconstruction.Write(save_dir);
 
-    write_single_and_fill_column<int>(output_cols[0], first_cluster_id,
-                                      num_models);
+    write_single_to_column<int>(output_cols[0], first_cluster_id);
     write_reconstruction_to_columns(output_cols[1], output_cols[2],
-                                    output_cols[3], save_dir, num_models);
+                                    output_cols[3], save_dir);
   }
+
+private:
+  int num_models_;
 };
 
 REGISTER_OP(MergeMappingCPU)
@@ -106,7 +112,8 @@ REGISTER_OP(MergeMappingCPU)
     .output("cluster_id")
     .output("cameras")
     .output("images")
-    .output("points3D");
+    .output("points3D")
+    .protobuf_name("MergeMappingCPUArgs");
 
 REGISTER_KERNEL(MergeMappingCPU, MergeMappingCPUKernel)
     .device(scanner::DeviceType::CPU)
