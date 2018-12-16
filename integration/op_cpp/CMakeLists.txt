@@ -33,6 +33,13 @@ execute_process(
 include(${SCANNER_CMAKE_PATH})
 message("scanner cmake ${SCANNER_CMAKE_PATH}")
 
+find_package(CUDA REQUIRED)
+add_definitions(-DHAVE_CUDA)
+include_directories(${CUDA_INCLUDE_DIRS})
+if(COMPILER_SUPPORTS_CXX1Y)
+  set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11")
+endif()
+
 build_op(
   LIB_NAME prepare_image
   CPP_SRCS prepare_image.cc
@@ -62,6 +69,17 @@ build_op(
   PROTO_SRC merge_mapping.proto
 )
 
+build_op(
+  LIB_NAME prepare_patch_match
+  CPP_SRCS prepare_patch_match.cc
+  PROTO_SRC prepare_patch_match.proto
+)
+
+build_op(
+  LIB_NAME patch_match
+  CPP_SRCS patch_match.cc
+)
+
 include_directories(${COLMAP_INCLUDE_DIRS})
 link_directories(${COLMAP_LINK_DIRS})
 
@@ -74,6 +92,7 @@ find_library(POISSON_RECON_LIB poisson_recon HINTS ${COLMAP_LINK_DIRS})
 find_library(SQLITE3_LIB sqlite3 HINTS ${COLMAP_LINK_DIRS})
 find_library(SIFT_GPU_LIB sift_gpu HINTS ${COLMAP_LINK_DIRS})
 find_library(VLFEAT_LIB vlfeat HINTS ${COLMAP_LINK_DIRS})
+find_library(COLMAP_CUDA_LIB colmap_cuda HINTS ${COLMAP_LINK_DIRS})
 
 SET (
   COLMAP_STATIC_LIB
@@ -86,13 +105,14 @@ SET (
   ${SQLITE3_LIB}
   ${SIFT_GPU_LIB}
   ${VLFEAT_LIB}
+  ${COLMAP_CUDA_LIB}
 )
 
 SET(STATIC_WHOLE_ARCHIVE -Wl,--whole-archive ${COLMAP_STATIC_LIB} -Wl,--no-whole-archive)
 
 # remove these from the list of libraries, as we want the linker to use
 # the static libraries from above
-list(REMOVE_ITEM COLMAP_LIBRARIES colmap flann graclus lsd pba poisson_recon sqlite3 sift_gpu vlfeat)
+list(REMOVE_ITEM COLMAP_LIBRARIES colmap flann graclus lsd pba poisson_recon sqlite3 sift_gpu vlfeat colmap_cuda)
 SET(COLMAP_LIBRARIES ${STATIC_WHOLE_ARCHIVE} ${COLMAP_LIBRARIES})
 
 target_link_libraries(prepare_image PUBLIC ${COLMAP_LIBRARIES})
@@ -100,3 +120,5 @@ target_link_libraries(extraction_op PUBLIC ${COLMAP_LIBRARIES})
 target_link_libraries(sequential_matching PUBLIC ${COLMAP_LIBRARIES})
 target_link_libraries(incremental_mapping PUBLIC ${COLMAP_LIBRARIES})
 target_link_libraries(merge_mapping PUBLIC ${COLMAP_LIBRARIES})
+target_link_libraries(prepare_patch_match PUBLIC ${COLMAP_LIBRARIES} ${CUDA_LIBRARIES})
+target_link_libraries(patch_match PUBLIC ${COLMAP_LIBRARIES} ${CUDA_LIBRARIES})

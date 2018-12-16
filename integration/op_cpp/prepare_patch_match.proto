@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message PreparePatchMatchArgs {
+  string sparse_reconstruction_path = 1;
+}

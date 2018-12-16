@@ -28,30 +28,6 @@ public:
     this->num_models_ = args.num_models();
   }
 
-  // write the content of elements into binary files and use colmap's
-  // builtin reconstruction reader to recreate the reconstruction
-  // this is a litte messy but is the easiest way to get the job done
-  void loadReconstruction(const Element &cameras, const Element &images,
-                          const Element &points3d,
-                          Reconstruction &reconstruction) {
-    // use the address of reconstruction object as tmp folder name
-    size_t addr = reinterpret_cast<size_t>(&reconstruction);
-
-    std::string tmp_path = std::to_string(addr);
-    colmap::CreateDirIfNotExists(tmp_path);
-
-    // convert binary content of each element to a file
-    write_binary_to_file(cameras, tmp_path + "/cameras.bin");
-    write_binary_to_file(images, tmp_path + "/images.bin");
-    write_binary_to_file(points3d, tmp_path + "/points3D.bin");
-
-    // create the reconstruction
-    reconstruction.ReadBinary(tmp_path);
-
-    // remove the tmp files
-    CHECK_EQ(system(("rm -rf " + tmp_path).c_str()), 0);
-  }
-
   void execute(const scanner::BatchedElements &input_cols,
                scanner::BatchedElements &output_cols) override {
     auto &cluster_id_batch = input_cols[0];

@@ -88,7 +88,7 @@ public:
         FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, true);
 
     colmap::Bitmap bitmap(fibitmap);
-    // only need grey scale for colmap
+    // only need grey scale for extraction
     colmap::Bitmap bitmap_grey = bitmap.CloneAsGrey();
 
     // set up configs for SIFT

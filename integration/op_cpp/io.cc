@@ -2,6 +2,7 @@
 #include "scanner/util/common.h"
 
 #include <colmap/base/database.h>
+#include <colmap/base/point2d.h>
 #include <colmap/base/reconstruction.h>
 #include <colmap/feature/types.h>
 #include <colmap/feature/utils.h>
@@ -21,6 +22,7 @@ using scanner::Element;
 using scanner::Elements;
 using scanner::insert_element;
 using scanner::u8;
+using scanner::DeviceHandle;
 
 using std::vector;
 
@@ -42,7 +44,7 @@ template <typename T> u8 *copy_object_to_buffer(void *buffer, T &data) {
 
 // copy content from source buffer to destination buffer
 // return the incremented buffer pointer
-u8 *copy_buffer_to_buffer(void *dest, void *src, size_t size) {
+u8 *copy_buffer_to_buffer(void *dest, const void *src, size_t size) {
   memcpy(dest, src, size);
   return static_cast<u8 *>(dest) + size;
 }
@@ -67,22 +69,28 @@ template <typename T> T read_single_from_element(const Element &element) {
 }
 
 // create a Buffer for a single element using the scanner::new_buffer
-template <typename T> Buffer create_single_buffer(T &data) {
+template <typename T>
+Buffer create_single_buffer(T &data, const DeviceHandle &device = DEVICE) {
   size_t byte_size = sizeof(T);
-  u8 *buffer = new_buffer(DEVICE, byte_size);
-  memcpy(buffer, &data, byte_size);
+  u8 *buffer = new_buffer(device, byte_size);
+  memcpy_buffer(buffer, device, reinterpret_cast<const u8 *>(&data), device,
+                byte_size);
   return Buffer(buffer, byte_size);
 }
 
 // write a single value to a scanner column
-template <typename T> void write_single_to_column(Elements &col, T &data) {
-  Buffer buffer = create_single_buffer(data);
+template <typename T>
+void write_single_to_column(Elements &col, const T &data,
+                            const DeviceHandle &device = DEVICE) {
+  Buffer buffer = create_single_buffer(data, device);
   insert_element(col, buffer.data, buffer.size);
 }
 
 // write a single value to a scanner element
-template <typename T> void write_single_to_element(Element &element, T &data) {
-  Buffer buffer = create_single_buffer(data);
+template <typename T>
+void write_single_to_element(Element &element, const T &data,
+                             const DeviceHandle &device = DEVICE) {
+  Buffer buffer = create_single_buffer(data, device);
   insert_element(element, buffer.data, buffer.size);
 }
 
@@ -162,7 +170,7 @@ void write_vector_to_element(Element &output, VectorType &data) {
 
 // write a vector type to a scanner column
 template <typename VectorType>
-void write_vector_to_column(Elements &col, VectorType &data) {
+void write_vector_to_column(Elements &col, const VectorType &data) {
   Buffer buffer = createVectorBuffer(data);
   insert_element(col, buffer.data, buffer.size);
 }
@@ -419,4 +427,162 @@ void write_binary_to_file(const Element &element, std::string path) {
   std::ofstream file(path, std::ios::binary);
   CHECK(file.write(reinterpret_cast<char *>(buffer), size));
   file.close();
+}
+
+// write the content of elements into binary files and use colmap's
+// builtin reconstruction reader to recreate the reconstruction
+// this is a litte messy but is the easiest way to get the job done
+void loadReconstruction(const Element &cameras, const Element &images,
+                        const Element &points3d,
+                        Reconstruction &reconstruction) {
+  // use the address of reconstruction object as tmp folder name
+  size_t addr = reinterpret_cast<size_t>(&reconstruction);
+
+  std::string tmp_path = std::to_string(addr);
+  colmap::CreateDirIfNotExists(tmp_path);
+
+  // convert binary content of each element to a file
+  write_binary_to_file(cameras, tmp_path + "/cameras.bin");
+  write_binary_to_file(images, tmp_path + "/images.bin");
+  write_binary_to_file(points3d, tmp_path + "/points3D.bin");
+
+  // create the reconstruction
+  reconstruction.ReadBinary(tmp_path);
+
+  // remove the tmp files
+  CHECK_EQ(system(("rm -rf " + tmp_path).c_str()), 0);
+}
+
+void writeImageToColumn(Elements &col, colmap::Image &image,
+                        scanner::DeviceHandle device = DEVICE) {
+  const auto &image_id = image.ImageId();
+  const auto &camera_id = image.CameraId();
+  const auto &qvec = image.Qvec();
+  const auto &tvec = image.Tvec();
+  const auto &num_points_2d = image.NumPoints2D();
+  const auto &points2d = image.Points2D();
+
+  size_t buffer_size = sizeof(image_id) + sizeof(camera_id) + sizeof(qvec) +
+                       sizeof(tvec) + sizeof(num_points_2d) +
+                       sizeof(colmap::Point2D) * num_points_2d;
+
+  u8 *buffer = new_buffer(device, buffer_size), *pointer = buffer;
+  pointer = copy_object_to_buffer(pointer, image_id);
+  pointer = copy_object_to_buffer(pointer, camera_id);
+  pointer = copy_object_to_buffer(pointer, qvec);
+  pointer = copy_object_to_buffer(pointer, tvec);
+  pointer = copy_object_to_buffer(pointer, num_points_2d);
+  for (const auto &point2d : points2d) {
+    pointer = copy_object_to_buffer(pointer, point2d);
+  }
+
+  insert_element(col, buffer, buffer_size);
+}
+
+void writeCameraToColumn(Elements &col, colmap::Camera &camera,
+                         scanner::DeviceHandle device = DEVICE) {
+  const auto &camera_id = camera.CameraId();
+  const auto &model_id = camera.ModelId();
+  const auto &width = camera.Width();
+  const auto &height = camera.Height();
+  const vector<double> &params = camera.Params();
+  const auto &prior_focal_length = camera.HasPriorFocalLength();
+
+  size_t buffer_size = sizeof(camera_id) + sizeof(model_id) + sizeof(width) +
+                       sizeof(height) + params.size() * sizeof(double);
+
+  u8 *buffer = new_buffer(device, buffer_size), *pointer = buffer;
+  pointer = copy_object_to_buffer(pointer, camera_id);
+  pointer = copy_object_to_buffer(pointer, model_id);
+  pointer = copy_object_to_buffer(pointer, width);
+  pointer = copy_object_to_buffer(pointer, height);
+  for (const double &param : params) {
+    pointer = copy_object_to_buffer(pointer, param);
+  }
+
+  insert_element(col, buffer, buffer_size);
+}
+
+colmap::Image readImageFromColumn(const Element data) {
+  u8 *buffer = data.buffer, *pointer = buffer;
+  colmap::Image image;
+
+  colmap::image_t image_id;
+  colmap::camera_t camera_id;
+  Eigen::Vector4d qvec;
+  Eigen::Vector3d tvec;
+  colmap::point2D_t num_points2d;
+  vector<colmap::Point2D> points2d;
+
+  pointer = read_single_from_buffer(pointer, &image_id);
+  pointer = read_single_from_buffer(pointer, &camera_id);
+  pointer = read_single_from_buffer(pointer, &qvec);
+  pointer = read_single_from_buffer(pointer, &tvec);
+  pointer = read_single_from_buffer(pointer, &num_points2d);
+
+  std::vector<colmap::point3D_t> point3D_ids;
+  point3D_ids.reserve(num_points2d);
+  for (int i = 0; i < num_points2d; i++) {
+    colmap::Point2D point2d;
+    pointer = read_single_from_buffer(pointer, &point2d);
+    points2d.push_back(point2d);
+  }
+
+  image.SetImageId(image_id);
+  image.SetCameraId(camera_id);
+  image.SetQvec(qvec);
+  image.SetTvec(tvec);
+  image.SetPoints2D(points2d);
+
+  image.NormalizeQvec();
+  // image.SetUp(Camera(image.CameraId()));
+  image.SetRegistered(true);
+
+  return image;
+}
+
+colmap::Camera readCameraFromColumn(const Element data) {
+  u8 *buffer = data.buffer, *pointer = buffer;
+  colmap::Camera camera;
+
+  colmap::camera_t camera_id;
+  int model_id;
+  size_t width;
+  size_t height;
+  bool prior_focal_length;
+
+  pointer = read_single_from_buffer(pointer, &camera_id);
+  pointer = read_single_from_buffer(pointer, &model_id);
+  pointer = read_single_from_buffer(pointer, &width);
+  pointer = read_single_from_buffer(pointer, &height);
+
+  camera.SetCameraId(camera_id);
+  camera.SetModelId(model_id);
+  camera.SetWidth(width);
+  camera.SetHeight(height);
+
+  auto params = camera.Params();
+  for (int i = 0; i < params.size(); i++) {
+    double param;
+    pointer = read_single_from_buffer(pointer, &param);
+    params[i] = param;
+  }
+
+  assert(camera.VerifyParams());
+  return camera;
+}
+
+template <typename ElementType>
+void writeArrayToColumn(Elements &col, const ElementType *array, int size,
+                        const scanner::DeviceHandle &device) {
+  size_t buffer_size = size * sizeof(ElementType);
+
+  u8 *buffer = new_buffer(device, buffer_size), *pointer = buffer;
+  memcpy(pointer, reinterpret_cast<const u8 *>(array), buffer_size);
+
+  insert_element(col, buffer, buffer_size);
+}
+
+template <typename Type> Type *readArrayFromElement(const Element &el) {
+  return reinterpret_cast<Type *>(el.buffer);
 }

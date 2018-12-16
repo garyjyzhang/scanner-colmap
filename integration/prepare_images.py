@@ -26,8 +26,7 @@ image_dir = os.path.expanduser(args.image_path)
 image_paths = []
 
 for i, file in enumerate(os.listdir(image_dir)):
-    if os.path.splitext(file)[1] == ".JPG":
-        image_paths.append(os.path.join(image_dir, file))
+    image_paths.append(os.path.join(image_dir, file))
 
 image_paths.sort()
 

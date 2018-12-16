@@ -13,7 +13,7 @@
 #include <colmap/feature/utils.h>
 #include <colmap/util/misc.h>
 
-#include <stdio.h>
+#include <iostream>
 
 using colmap::BundleAdjustmentOptions;
 using colmap::Camera;
@@ -388,7 +388,6 @@ REGISTER_OP(IncrementalMappingCPU)
     .output("images_bin")
     .output("points3D_bin")
     .protobuf_name("IncrementalMappingCPUArgs");
-;
 
 REGISTER_KERNEL(IncrementalMappingCPU, IncrementalMappingCPUKernel)
     .device(scanner::DeviceType::CPU)
