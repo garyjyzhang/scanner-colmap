@@ -1,6 +1,6 @@
 # scanner-colmap
 
-Scanner-colmap re-expresses [Colmap](https://colmap.github.io/index.html)'s 3D reconstruction pipeline using the [Scanner](https://github.com/scanner-research/scanner) video/image analysis system. The combination allows Colmap to scale to large image collections or even directly from video inputs. The tool is still under development and undergoing improvements. The current progress is up to the stereo fusion step. At this moment, processes before dense reconstruction can only be run with CPU's, the corresponding GPU kernels for these processes will be updated in the future. 
+Scanner-colmap re-expresses [Colmap](https://colmap.github.io/index.html)'s 3D reconstruction pipeline using the [Scanner](https://github.com/scanner-research/scanner) video/image analysis system. The combination allows Colmap to run on large image collections using cluster of computers and provides built-in support for sampling video inputs. The tool is still under development and undergoing improvements. The current progress is up to the stereo fusion step. At this moment, processes before dense reconstruction can only be run with CPU's, the corresponding GPU kernels for these processes will be updated in the future. 
 
 ![Alt text](https://user-images.githubusercontent.com/12142904/47631345-f57fa180-db02-11e8-833e-a1134f51fb9b.png)
 The resulting model of running sparse reconstruction on the [Gerrard Hall image set](https://drive.google.com/drive/folders/0B6q7-Pen0AbDTk5WM2hkUjF0Znc) using scanner-colmap.
