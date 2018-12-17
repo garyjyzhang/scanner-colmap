@@ -62,7 +62,7 @@ Due to the fact that scanner needs to know the output size in advance, we need t
 ```
 python3 patch_match.py --scanner_config /path/to/config.toml --overlap 20
 ```
-7. Stereo fusion. Produce a colored dense point cloud using the dense reconstruction results. Each rows in the output is the collection of points for one image, where each point corresponds to one pixel. 
+7. Stereo fusion. Produce a colored dense point cloud by fusing and merging the depth maps obtained in the previous step. Each rows in the output is the collection of points for one image, where each point corresponds to one pixel. 
 ```
 python3 stereo_fusion.py --scanner_config /path/to/config.toml --overlap 20
 ```
