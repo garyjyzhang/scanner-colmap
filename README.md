@@ -57,6 +57,7 @@ Note: The following steps require a gpu and CUDA to run
 python3 prepare_patch_match.py --scanner_config /path/to/config.toml --input_path /path/to/sparse_reconstruction --num_reg_images <number of registered images from sparse reconstruction>
 ```
 Due to the fact that scanner needs to know the output size in advance, we need to pass in the number of registered images from sparse reconstrcuction in order to produce the correct number of rows. 
+
 6. Dense reconstruction. Run dense reconstruction on the prepared inputs from previous step. This step produces a depth and normal map for each registered image based on reference points from the sparse reconstruction.
 ```
 python3 patch_match.py --scanner_config /path/to/config.toml --overlap 20
